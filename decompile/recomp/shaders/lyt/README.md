@@ -37,3 +37,13 @@ remplacer le shader de pixels de tous les programmes par un shader de diagnostic
 
 `make_lyt_gsh.py --debug-colors` remplace chaque shader de pixels par une couleur unique
 (R = bits 0–1 du numéro, V = bits 2–3, B = bit 4) pour voir quel programme dessine quoi.
+
+## uTextureMode : calcul côté jeu (0x03460AD0)
+
+Envoyé seulement pour les matériaux à 2 textures ou plus (2 bits de poids fort du mot de
+drapeaux du matériau, +0xC) ; sinon le jeu envoie le nombre de textures (0 ou 1). Pour chaque
+étage de combinaison k (4 octets chacun) : octet k de la valeur = `table[combineRgb]`, plus
+0x80 si l'octet suivant (alpha) vaut 1. Table (0x103E0C68), indexée par le mode
+Replace, Modulate, Add, AddSigned, Interpolate, Subtract, Dodge, Burn, Overlay, Indirect,
+BlendIndirect, EachIndirect : 2, 3, 4, 6, 2, 5, 7, 8, 9, 0xE, 0xF, 0x10. Pas encore exploité
+par `lyt.psh` (texture 0 seulement).
