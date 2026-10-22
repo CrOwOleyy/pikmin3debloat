@@ -1,0 +1,16 @@
+# Dérivés du binaire et des fichiers du jeu (régénérables avec scripts/, voir recomp/README.md)
+extracted/
+ghidra/
+recomp/carrot_linked.elf
+recomp/generated/
+recomp/runtime/generated/
+recomp/config/
+recomp/content_override/
+
+# Outils tiers clonés : leurs modifications sont dans patches/*.patch
+tools/
+
+# Compilation et diagnostics
+recomp/build/
+recomp/gpu/build/
+capture/

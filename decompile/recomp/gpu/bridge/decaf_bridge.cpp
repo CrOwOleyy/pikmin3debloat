@@ -1,0 +1,520 @@
+// Pont entre notre runtime et le code HLE de decaf-emu (GX2) :
+//
+//  * chaque fonction exportée par la bibliothèque GX2 de decaf remplace l'import gx2::*
+//    correspondant ; l'appel convertit notre PPCContext en cpu::Core (la structure de
+//    registres de decaf), laisse l'enveloppe typée de decaf lire ses arguments, puis
+//    recopie les registres de retour ;
+//  * quand decaf rappelle du code du jeu (cafe::invoke -> cpu::this_core::executeSub),
+//    le cpu::Core est recopié dans le PPCContext du thread et la fonction recompilée
+//    est appelée ;
+//  * les données internes de GX2 (RegisterDataInternal) sont allouées en mémoire invitée.
+#include "kernel.h"
+
+#include <cafe/libraries/cafe_hle_library.h>
+#include <cafe/libraries/gx2/gx2.h>
+#include <cafe/libraries/gx2/gx2_shaders.h>
+#include <libgpu/latte/latte_disassembler.h>
+#include <set>
+#include <libcpu/cpu_control.h>
+#include <libcpu/state.h>
+
+#include <atomic>
+#include <vector>
+#include <cstring>
+#include <unordered_map>
+
+namespace
+{
+
+thread_local cpu::Core* t_core = nullptr;
+
+void contextToCore(const PPCContext& ctx, cpu::Core& core)
+{
+    const PPCRegister* gpr[32] = { &ctx.r0, &ctx.r1, &ctx.r2, &ctx.r3, &ctx.r4, &ctx.r5, &ctx.r6, &ctx.r7,
+        &ctx.r8, &ctx.r9, &ctx.r10, &ctx.r11, &ctx.r12, &ctx.r13, &ctx.r14, &ctx.r15, &ctx.r16, &ctx.r17,
+        &ctx.r18, &ctx.r19, &ctx.r20, &ctx.r21, &ctx.r22, &ctx.r23, &ctx.r24, &ctx.r25, &ctx.r26, &ctx.r27,
+        &ctx.r28, &ctx.r29, &ctx.r30, &ctx.r31 };
+    const PPCRegister* fpr[32] = { &ctx.f0, &ctx.f1, &ctx.f2, &ctx.f3, &ctx.f4, &ctx.f5, &ctx.f6, &ctx.f7,
+        &ctx.f8, &ctx.f9, &ctx.f10, &ctx.f11, &ctx.f12, &ctx.f13, &ctx.f14, &ctx.f15, &ctx.f16, &ctx.f17,
+        &ctx.f18, &ctx.f19, &ctx.f20, &ctx.f21, &ctx.f22, &ctx.f23, &ctx.f24, &ctx.f25, &ctx.f26, &ctx.f27,
+        &ctx.f28, &ctx.f29, &ctx.f30, &ctx.f31 };
+    for (int i = 0; i < 32; i++)
+    {
+        core.gpr[i] = gpr[i]->u32;
+        core.fpr[i].paired0 = fpr[i]->f64;
+        core.fpr[i].paired1 = ctx.ps1[i].f64;
+    }
+    core.lr = uint32_t(ctx.lr);
+    core.ctr = ctx.ctr.u32;
+    const PPCCRRegister* cr[8] = { &ctx.cr0, &ctx.cr1, &ctx.cr2, &ctx.cr3, &ctx.cr4, &ctx.cr5, &ctx.cr6, &ctx.cr7 };
+    uint32_t crValue = 0;
+    for (int i = 0; i < 8; i++)
+        crValue |= ((cr[i]->lt << 3) | (cr[i]->gt << 2) | (cr[i]->eq << 1) | cr[i]->so) << (28 - 4 * i);
+    core.cr.value = crValue;
+    core.xer.value = (uint32_t(ctx.xer.so) << 31) | (uint32_t(ctx.xer.ov) << 30) | (uint32_t(ctx.xer.ca) << 29);
+    for (int i = 0; i < 8; i++)
+        core.gqr[i].value = ctx.gqr[i];
+}
+
+void coreToContext(const cpu::Core& core, PPCContext& ctx)
+{
+    PPCRegister* gpr[32] = { &ctx.r0, &ctx.r1, &ctx.r2, &ctx.r3, &ctx.r4, &ctx.r5, &ctx.r6, &ctx.r7,
+        &ctx.r8, &ctx.r9, &ctx.r10, &ctx.r11, &ctx.r12, &ctx.r13, &ctx.r14, &ctx.r15, &ctx.r16, &ctx.r17,
+        &ctx.r18, &ctx.r19, &ctx.r20, &ctx.r21, &ctx.r22, &ctx.r23, &ctx.r24, &ctx.r25, &ctx.r26, &ctx.r27,
+        &ctx.r28, &ctx.r29, &ctx.r30, &ctx.r31 };
+    PPCRegister* fpr[32] = { &ctx.f0, &ctx.f1, &ctx.f2, &ctx.f3, &ctx.f4, &ctx.f5, &ctx.f6, &ctx.f7,
+        &ctx.f8, &ctx.f9, &ctx.f10, &ctx.f11, &ctx.f12, &ctx.f13, &ctx.f14, &ctx.f15, &ctx.f16, &ctx.f17,
+        &ctx.f18, &ctx.f19, &ctx.f20, &ctx.f21, &ctx.f22, &ctx.f23, &ctx.f24, &ctx.f25, &ctx.f26, &ctx.f27,
+        &ctx.f28, &ctx.f29, &ctx.f30, &ctx.f31 };
+    for (int i = 0; i < 32; i++)
+    {
+        gpr[i]->u64 = core.gpr[i];
+        fpr[i]->f64 = core.fpr[i].paired0;
+        ctx.ps1[i].f64 = core.fpr[i].paired1;
+    }
+    ctx.lr = core.lr;
+    ctx.ctr.u64 = core.ctr;
+    PPCCRRegister* cr[8] = { &ctx.cr0, &ctx.cr1, &ctx.cr2, &ctx.cr3, &ctx.cr4, &ctx.cr5, &ctx.cr6, &ctx.cr7 };
+    for (int i = 0; i < 8; i++)
+    {
+        const uint32_t field = (core.cr.value >> (28 - 4 * i)) & 0xF;
+        cr[i]->lt = (field >> 3) & 1;
+        cr[i]->gt = (field >> 2) & 1;
+        cr[i]->eq = (field >> 1) & 1;
+        cr[i]->so = field & 1;
+    }
+    ctx.xer.so = (core.xer.value >> 31) & 1;
+    ctx.xer.ov = (core.xer.value >> 30) & 1;
+    ctx.xer.ca = (core.xer.value >> 29) & 1;
+    for (int i = 0; i < 8; i++)
+        ctx.gqr[i] = core.gqr[i].value;
+}
+
+// Garde-fous devant certaines fonctions GX2 : renvoie vrai pour sauter l'appel (le résultat
+// est alors 0). Sert à tolérer des données de jeu manquantes ou abîmées - voir ci-dessous.
+using Guard = bool (*)(PPCContext&);
+
+struct BridgeFunction
+{
+    cafe::hle::LibraryFunction* fn;
+    Guard guard;
+};
+
+// Un shader dont le programme est absent (fichier GSH illisible : le chargeur du jeu laisse la
+// structure à zéro) ferait échouer une assertion de decaf dans GX2Set*Shader, puis planter
+// libgpu au premier dessin. On signale, on saute le réglage, et on saute aussi les dessins
+// tant que le jeu croit avoir un shader manquant lié (état approximé globalement).
+std::atomic<bool> s_vertexShaderMissing { false };
+std::atomic<bool> s_pixelShaderMissing { false };
+std::atomic<uint32_t> s_skippedDraws { 0 };
+
+template<typename Shader>
+bool shaderHasProgram(uint32_t address)
+{
+    if (!address)
+        return false;
+    auto shader = virt_cast<Shader *>(virt_addr { address });
+    auto program = virt_cast<virt_addr>(shader->data).getAddress();
+    uint32_t size = shader->size;
+    if (!program)
+    {
+        program = virt_cast<virt_addr>(shader->gx2rData.buffer).getAddress();
+        size = shader->gx2rData.elemCount * shader->gx2rData.elemSize;
+    }
+    return program && size;
+}
+
+void warnOnce(std::atomic<bool>& flag, const char* what)
+{
+    if (!flag.exchange(true))
+        RT_WARN("GX2 : %s sans programme (shader illisible, fichier GSH abîmé ?) : ignoré", what);
+}
+
+// Diagnostic (--probe) : désassemble les premiers shaders de sommets distincts.
+void probeDumpVertexShader(uint32_t address)
+{
+    static std::set<uint32_t> seen;
+    static std::mutex lock;
+    std::lock_guard guard(lock);
+    if (seen.size() >= 4 || !seen.insert(address).second)
+        return;
+    auto shader = virt_cast<cafe::gx2::GX2VertexShader *>(virt_addr { address });
+    auto code = virt_cast<virt_addr>(shader->data).getAddress();
+    if (!code)
+        return;
+    const uint32_t size = shader->size;
+    const std::string text = latte::disassemble(gsl::span<const uint8_t>(rt::ptr(code), size));
+    RT_INFO("SONDE shader de sommets 0x%08X (%u octets) :\n%s", address, size, text.c_str());
+}
+
+bool guardSetVertexShader(PPCContext& ctx)
+{
+    static std::atomic<bool> warned { false };
+    const bool ok = shaderHasProgram<cafe::gx2::GX2VertexShader>(ctx.r3.u32);
+    if (ok && rt::g_probe)
+        probeDumpVertexShader(ctx.r3.u32);
+    s_vertexShaderMissing = !ok;
+    if (!ok)
+        warnOnce(warned, "GX2SetVertexShader");
+    return !ok;
+}
+
+bool guardSetPixelShader(PPCContext& ctx)
+{
+    static std::atomic<bool> warned { false };
+    const bool ok = shaderHasProgram<cafe::gx2::GX2PixelShader>(ctx.r3.u32);
+    s_pixelShaderMissing = !ok;
+    if (!ok)
+        warnOnce(warned, "GX2SetPixelShader");
+    return !ok;
+}
+
+bool guardSetGeometryShader(PPCContext& ctx)
+{
+    static std::atomic<bool> warned { false };
+    const bool ok = shaderHasProgram<cafe::gx2::GX2GeometryShader>(ctx.r3.u32);
+    if (!ok)
+        warnOnce(warned, "GX2SetGeometryShader");
+    return !ok;
+}
+
+bool guardSetVertexUniformBlock(PPCContext& ctx); // défini avec les SLOT_GUARD, plus bas
+
+// Diagnostic (--probe) : tampons d'attributs et blocs uniformes liés, relus au moment du dessin.
+struct BoundBuffer
+{
+    uint32_t address = 0, size = 0, stride = 0;
+};
+BoundBuffer s_attribBuffers[16];
+BoundBuffer s_vsUniformBlocks[16];
+
+bool guardSetAttribBuffer(PPCContext& ctx)
+{
+    // GX2SetAttribBuffer(index, size, stride, buffer)
+    if (rt::g_probe && ctx.r3.u32 < 16)
+        s_attribBuffers[ctx.r3.u32] = { ctx.r6.u32, ctx.r4.u32, ctx.r5.u32 };
+    return false;
+}
+
+bool guardRecordVertexUniformBlock(PPCContext& ctx)
+{
+    // GX2SetVertexUniformBlock(location, size, data)
+    if (rt::g_probe && ctx.r3.u32 < 16)
+        s_vsUniformBlocks[ctx.r3.u32] = { ctx.r5.u32, ctx.r4.u32, 0 };
+    return guardSetVertexUniformBlock(ctx);
+}
+
+void probeFloats(const char* label, uint32_t address, uint32_t count)
+{
+    std::string text;
+    for (uint32_t i = 0; i < count; i++)
+    {
+        const uint32_t bits = rt::load32(address + i * 4);
+        float f;
+        memcpy(&f, &bits, 4);
+        char buf[24];
+        snprintf(buf, sizeof(buf), "%s%.4g", i && i % 4 == 0 ? " | " : " ", f);
+        text += buf;
+    }
+    RT_INFO("   %s @%08X :%s", label, address, text.c_str());
+}
+
+struct UniformUpload
+{
+    uint32_t offset, count;
+    float values[16];
+};
+std::vector<UniformUpload> s_uploadsSinceDraw;
+
+// Dernière matrice envoyée par GX2SetVertexUniformReg (16 flottants, valeurs au moment de l'appel).
+float s_lastVsMatrix[16];
+bool s_haveVsMatrix = false;
+
+float guestFloatAt(uint32_t addr)
+{
+    const uint32_t bits = rt::load32(addr);
+    float f;
+    memcpy(&f, &bits, 4);
+    return f;
+}
+
+// Coordonnées de clip (x, y) de chaque sommet du tampon d'attributs `buffer`, via la dernière
+// matrice : clip = C_i . (x, y, 0, 1) avec C_i = lignes 0 et 1 des 16 flottants envoyés.
+void probeClipBounds(const BoundBuffer& b, uint32_t index)
+{
+    if (!b.address || !s_haveVsMatrix || b.stride < 8)
+        return;
+    const uint32_t count = std::min(b.size / b.stride, 4096u);
+    float minX = 1e30f, maxX = -1e30f, minY = 1e30f, maxY = -1e30f;
+    uint32_t used = 0;
+    for (uint32_t v = 0; v < count; v++)
+    {
+        const float x = guestFloatAt(b.address + v * b.stride), y = guestFloatAt(b.address + v * b.stride + 4);
+        if (!std::isfinite(x) || !std::isfinite(y) || std::fabs(x) > 1e6f || std::fabs(y) > 1e6f)
+            continue;
+        const float cx = s_lastVsMatrix[0] * x + s_lastVsMatrix[1] * y + s_lastVsMatrix[3];
+        const float cy = s_lastVsMatrix[4] * x + s_lastVsMatrix[5] * y + s_lastVsMatrix[7];
+        minX = std::min(minX, cx); maxX = std::max(maxX, cx);
+        minY = std::min(minY, cy); maxY = std::max(maxY, cy);
+        used++;
+    }
+    if (used)
+        RT_INFO("   tampon %u (%u sommets, stride %u) : clip x [%.3f .. %.3f]  y [%.3f .. %.3f]", index, used,
+            b.stride, minX, maxX, minY, maxY);
+}
+
+void probeDraw(PPCContext& ctx)
+{
+    static std::atomic<uint32_t> draws { 0 };
+    const uint32_t n = draws++;
+    if (n >= 3000 && n < 3012)
+    {
+        RT_INFO("SONDE dessin #%u mode=%u count=%u : %zu envois de constantes VS depuis le dernier dessin", n,
+            ctx.r3.u32, ctx.r4.u32, s_uploadsSinceDraw.size());
+        for (const auto& u : s_uploadsSinceDraw)
+        {
+            std::string text;
+            for (uint32_t i = 0; i < std::min(u.count, 16u); i++)
+            {
+                char buf[24];
+                snprintf(buf, sizeof(buf), "%s%.4g", i && i % 4 == 0 ? " | " : " ", u.values[i]);
+                text += buf;
+            }
+            RT_INFO("     offset=%u count=%u :%s", u.offset, u.count, text.c_str());
+        }
+        for (uint32_t i = 0; i < 2; i++)
+            if (s_attribBuffers[i].address && ctx.r4.u32 >= 100)
+            {
+                // Premier sommet de chaque quad : (x, y) de quelques glyphes répartis dans le tampon.
+                const auto& b = s_attribBuffers[i];
+                const uint32_t total = b.size / b.stride;
+                for (uint32_t v = 0; v < total; v += total / 6 / 4 * 4 + 4)
+                    RT_INFO("     glyphe quad@sommet %u : x=%.1f y=%.1f u=%.3f v=%.3f", v,
+                        guestFloatAt(b.address + v * b.stride), guestFloatAt(b.address + v * b.stride + 4),
+                        guestFloatAt(b.address + v * b.stride + 16), guestFloatAt(b.address + v * b.stride + 20));
+            }
+    }
+    s_uploadsSinceDraw.clear();
+    if (n < 3000 || n >= 3002)
+        return;
+    RT_INFO("SONDE dessin #%u mode=%u count=%u", n, ctx.r3.u32, ctx.r4.u32);
+    for (uint32_t i = 0; i < 16; i++)
+        if (s_attribBuffers[i].address)
+            probeFloats(("attributs tampon " + std::to_string(i) + " (stride " +
+                std::to_string(s_attribBuffers[i].stride) + ")").c_str(), s_attribBuffers[i].address,
+                std::min(s_attribBuffers[i].size / 4, 24u));
+    for (uint32_t i = 0; i < 16; i++)
+        if (s_vsUniformBlocks[i].address)
+            probeFloats(("bloc uniforme VS " + std::to_string(i)).c_str(), s_vsUniformBlocks[i].address,
+                std::min(s_vsUniformBlocks[i].size / 4, 16u));
+}
+
+bool guardDraw(PPCContext& ctx)
+{
+    if (rt::g_probe)
+        probeDraw(ctx);
+    if (!s_vertexShaderMissing && !s_pixelShaderMissing)
+        return false;
+    const uint32_t n = ++s_skippedDraws;
+    if (n == 1 || n % 5000 == 0)
+        RT_WARN("GX2 : %u dessins ignorés (shader manquant)", n);
+    return true;
+}
+
+// Emplacement (échantillonneur, texture, bloc uniforme) tiré de la structure d'un shader : si
+// le shader est vide, le jeu n'y trouve rien et passe un identifiant invalide (-1…) que decaf
+// refuse par assertion. On ignore l'appel, en le signalant une fois par fonction.
+#define SLOT_GUARD(NAME, REG, LIMIT)                                                                  bool guard##NAME(PPCContext& ctx)                                                                {                                                                                                     static std::atomic<bool> warned { false };                                                        if (ctx.REG.u32 < (LIMIT))                                                                            return false;                                                                                 if (!warned.exchange(true))                                                                           RT_WARN("GX2 : %s avec un emplacement invalide (%u) : ignoré", #NAME, ctx.REG.u32);           return true;                                                                                  }
+SLOT_GUARD(SetPixelSampler, r4, 0x12)
+SLOT_GUARD(SetVertexSampler, r4, 0x12)
+SLOT_GUARD(SetGeometrySampler, r4, 0x12)
+SLOT_GUARD(SetPixelTexture, r4, 0x12)
+SLOT_GUARD(SetVertexTexture, r4, 0x12)
+SLOT_GUARD(SetGeometryTexture, r4, 0x12)
+SLOT_GUARD(SetPixelSamplerBorderColor, r3, 0x12)
+SLOT_GUARD(SetVertexSamplerBorderColor, r3, 0x12)
+SLOT_GUARD(SetGeometrySamplerBorderColor, r3, 0x12)
+SLOT_GUARD(SetPixelUniformBlock, r3, 0x10)
+SLOT_GUARD(SetVertexUniformBlock, r3, 0x10)
+SLOT_GUARD(SetGeometryUniformBlock, r3, 0x10)
+#undef SLOT_GUARD
+
+// GX2Set{Vertex,Pixel}UniformReg(offset, count, data) : `offset` compte des vecteurs de 4 mots ;
+// les 16 bits hauts désignent une constante de boucle (32 au plus). Chaque étage dispose de
+// 256 vecteurs (1024 mots).
+bool guardRecordVsUniformReg(PPCContext& ctx);
+
+bool guardSetUniformReg(PPCContext& ctx)
+{
+    static std::atomic<bool> warned { false };
+    const uint32_t offset = ctx.r3.u32, count = ctx.r4.u32;
+    const uint32_t loop = offset >> 16;
+    const uint32_t low = loop ? (offset & 0x7FFF) : offset;
+    if (loop < 32 && uint64_t(low) * 4 + count <= 1024)
+        return false;
+    if (!warned.exchange(true))
+        RT_WARN("GX2 : GX2Set*UniformReg avec un décalage invalide (0x%X, %u mots) : ignoré", offset, count);
+    return true;
+}
+
+bool guardRecordVsUniformReg(PPCContext& ctx)
+{
+    // GX2SetVertexUniformReg(offset, count, data) : on mémorise tous les envois depuis le dernier dessin.
+    if (rt::g_probe && ctx.r5.u32 && ctx.r4.u32 <= 4096 && s_uploadsSinceDraw.size() < 16)
+    {
+        UniformUpload u { ctx.r3.u32, ctx.r4.u32, {} };
+        for (uint32_t i = 0; i < std::min(ctx.r4.u32, 16u); i++)
+            u.values[i] = guestFloatAt(ctx.r5.u32 + i * 4);
+        s_uploadsSinceDraw.push_back(u);
+        if (ctx.r3.u32 == 0 && ctx.r4.u32 >= 16)
+        {
+            memcpy(s_lastVsMatrix, u.values, sizeof(s_lastVsMatrix));
+            s_haveVsMatrix = true;
+        }
+    }
+    return guardSetUniformReg(ctx);
+}
+
+const std::unordered_map<std::string, Guard> kGuards = {
+    { "GX2SetAttribBuffer", guardSetAttribBuffer },
+    { "GX2SetVertexUniformReg", guardRecordVsUniformReg },
+    { "GX2SetPixelUniformReg", guardSetUniformReg },
+    { "GX2SetPixelSampler", guardSetPixelSampler },
+    { "GX2SetVertexSampler", guardSetVertexSampler },
+    { "GX2SetGeometrySampler", guardSetGeometrySampler },
+    { "GX2SetPixelTexture", guardSetPixelTexture },
+    { "GX2SetVertexTexture", guardSetVertexTexture },
+    { "GX2SetGeometryTexture", guardSetGeometryTexture },
+    { "GX2SetPixelSamplerBorderColor", guardSetPixelSamplerBorderColor },
+    { "GX2SetVertexSamplerBorderColor", guardSetVertexSamplerBorderColor },
+    { "GX2SetGeometrySamplerBorderColor", guardSetGeometrySamplerBorderColor },
+    { "GX2SetPixelUniformBlock", guardSetPixelUniformBlock },
+    { "GX2SetVertexUniformBlock", guardRecordVertexUniformBlock },
+    { "GX2SetGeometryUniformBlock", guardSetGeometryUniformBlock },
+    { "GX2SetVertexShader", guardSetVertexShader },
+    { "GX2SetPixelShader", guardSetPixelShader },
+    { "GX2SetGeometryShader", guardSetGeometryShader },
+    { "GX2DrawEx", guardDraw },
+    { "GX2DrawEx2", guardDraw },
+    { "GX2DrawIndexedEx", guardDraw },
+    { "GX2DrawIndexedEx2", guardDraw },
+    { "GX2DrawIndexedImmediateEx", guardDraw },
+};
+
+// Appel d'une fonction HLE de decaf depuis le code recompilé.
+void invokeDecafFunction(PPCContext& ctx, uint8_t*, void* user)
+{
+    auto* bridge = static_cast<BridgeFunction*>(user);
+    if (bridge->guard && bridge->guard(ctx))
+    {
+        ctx.r3.u64 = 0;
+        return;
+    }
+    auto* fn = bridge->fn;
+    cpu::Core core {};
+    contextToCore(ctx, core);
+    cpu::Core* previous = t_core;
+    t_core = &core;
+    cpu::Core* result = fn->invokeHandler(&core, 0);
+    t_core = previous;
+    coreToContext(*result, ctx);
+}
+
+// Expose registerSymbols(), protégée dans cafe::hle::Library.
+struct Gx2Library : cafe::gx2::Library
+{
+    using cafe::gx2::Library::registerSymbols;
+};
+
+} // namespace
+
+// ---------------------------------------------------------------- libcpu côté decaf
+namespace cpu::this_core
+{
+
+cpu::Core* state()
+{
+    return t_core;
+}
+
+// Exécute du code invité à core->nia (cafe::invoke) sur le contexte du thread courant.
+void executeSub()
+{
+    cpu::Core* core = t_core;
+    PPCContext& ctx = *rt::currentContext();
+    coreToContext(*core, ctx);
+    PPCCallIndirect(ctx, rt::g_base, core->nia);
+    contextToCore(ctx, *core);
+}
+
+// Cœur Cafe OS du thread courant (0, 1 ou 2) : GX2 tient un tampon de commandes actif par cœur.
+uint32_t id()
+{
+    const auto* thread = rt::kernel::current();
+    return thread ? static_cast<uint32_t>(thread->core) : 1;
+}
+
+} // namespace cpu::this_core
+
+// ---------------------------------------------------------------- enregistrement
+namespace
+{
+BridgeFunction* s_gx2Entry = nullptr;
+}
+
+namespace rt
+{
+
+// Appelle l'initialisation du module gx2.rpl (rpl_entry) sur le thread invité courant.
+void decafGx2RunEntry()
+{
+    if (!s_gx2Entry)
+        return;
+    PPCContext& ctx = *currentContext();
+    PPCContext saved = ctx;
+    ctx.r3.u64 = 0;
+    ctx.r4.u64 = 1; // OSDynLoad_EntryReason::Loaded
+    invokeDecafFunction(ctx, g_base, s_gx2Entry);
+    ctx = saved;
+}
+
+void decafGx2Register()
+{
+    static Gx2Library library;
+    library.registerSymbols();
+    size_t functions = 0, data = 0, internals = 0;
+    for (auto& [name, symbol] : library.getSymbolMap())
+    {
+        if (symbol->type == cafe::hle::LibrarySymbol::Function)
+        {
+            auto* fn = static_cast<cafe::hle::LibraryFunction*>(symbol.get());
+            auto guard = kGuards.find(name);
+            auto* bridge = new BridgeFunction { fn, guard == kGuards.end() ? nullptr : guard->second };
+            if (name == "rpl_entry")
+                s_gx2Entry = bridge;
+            else if (fn->hostPtr)
+            {
+                // Fonction interne passée au jeu comme pointeur (callbacks…)
+                *fn->hostPtr = virt_cast<void*>(virt_addr { exportHostFunction(invokeDecafFunction, bridge) });
+                internals++;
+            }
+            else if (hleSetImplementation("gx2", name, invokeDecafFunction, bridge))
+                functions++;
+        }
+        else if (symbol->type == cafe::hle::LibrarySymbol::Data)
+        {
+            auto* d = static_cast<cafe::hle::LibraryData*>(symbol.get());
+            const uint32_t addr = sysAlloc(std::max<uint32_t>(d->size, 4), std::max<uint32_t>(d->align, 16));
+            if (d->constructor)
+                d->constructor(ptr(addr));
+            if (d->hostPointer)
+                *d->hostPointer = virt_cast<void*>(virt_addr { addr });
+            data++;
+        }
+    }
+    RT_INFO("GX2 de decaf : %zu fonctions branchées, %zu internes, %zu données", functions, internals, data);
+    for (const auto& name : hleListWithoutEx("gx2"))
+        RT_INFO("  import gx2 non couvert par decaf : %s", name.c_str());
+}
+
+} // namespace rt

@@ -52,3 +52,19 @@ tools/mxharness/
 *~
 Thumbs.db
 Desktop.ini
+
+# ---------------------------------------------------------------------------
+# Pikmin 3 (Wii U) - recompilation statique (dossier decompile/)
+# Données du jeu (protégées par le droit d'auteur) : jamais dans le dépôt.
+PIKMIN 3 */
+*.rpx
+*.rpl
+*.wud
+*.wux
+*.gsh
+*.szs
+*.sarc
+*.bfres
+# Conversations privées
+conv/
+*.log

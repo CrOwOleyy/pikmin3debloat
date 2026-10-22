@@ -1,0 +1,49 @@
+Sections scannées : ['.syscall', '.text']
+Total instructions : 5360280
+
+=== Paired-singles détectés ===
+  primaire 4  (ps_* arithmétique) : 19696
+  psq_l/lu/st/stu (56/57/60/61)   : 14321
+      psq_l    (op 56) : 9108
+      psq_st   (op 60) : 5213
+  => 34017 instr. paired-single sur 5360280 (0.635 %)
+
+  Jeu d'opcodes paired-single utilisés (à implémenter) :
+      ps_merge10       : 11719
+      psq_l            : 9108
+      psq_st           : 5213
+      ps_muls0         : 2098
+      ps_add           : 1544
+      ps_sub           : 1293
+      ps_mul           : 892
+      ps_sum0          : 643
+      ps_madds0        : 544
+      ps_madds1        : 503
+      ps_madd          : 173
+      ps_msub          : 81
+      ps_merge11       : 49
+      ps_merge00       : 48
+      ps_nmadd         : 24
+      ps_sum1          : 23
+      ps_merge01       : 19
+      ps_mr            : 17
+      ps_nmsub         : 13
+      ps_sel           : 4
+      ps_neg           : 3
+      ps_muls1         : 2
+      ps_rsqrte        : 2
+      ps_cmpo0         : 2
+
+=== Primaires les plus fréquents (contexte) ===
+  op 14 : 815934
+  op 32 : 785850
+  op 31 : 727002
+  op 36 : 696221
+  op 16 : 423884
+  op 18 : 336073
+  op 15 : 293295
+  op 19 : 243290
+  op 11 : 229280
+  op 48 : 116566
+  op 52 : 104080
+  op 38 : 99037

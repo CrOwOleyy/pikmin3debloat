@@ -1,0 +1,67 @@
+diff --git a/src/libdecaf/src/cafe/libraries/gx2/gx2_fetchshader.cpp b/src/libdecaf/src/cafe/libraries/gx2/gx2_fetchshader.cpp
+index 8e998c9..c97c57e 100644
+--- a/src/libdecaf/src/cafe/libraries/gx2/gx2_fetchshader.cpp
++++ b/src/libdecaf/src/cafe/libraries/gx2/gx2_fetchshader.cpp
+@@ -301,8 +301,10 @@ GX2InitFetchShaderEx(virt_ptr<GX2FetchShader> fetchShader,
+          }
+ 
+          // Setup dest
++         // Pikmin 3 Recomp : un attribut absent du shader a location = -1 ; le matériel
++         // ne garde que les 7 bits du champ (decaf échouait sur une assertion).
+          vfetch.gpr = vfetch.gpr
+-            .DST_GPR(attrib.location);
++            .DST_GPR(attrib.location & 0x7F);
+ 
+          vfetch.word1 = vfetch.word1
+             .DST_SEL_W(static_cast<latte::SQ_SEL>(attrib.mask & 0x7))
+diff --git a/src/libgpu/gpu_config.h b/src/libgpu/gpu_config.h
+index cc2ac1c..e3a0759 100644
+--- a/src/libgpu/gpu_config.h
++++ b/src/libgpu/gpu_config.h
+@@ -48,6 +48,9 @@ struct DisplaySettings
+    ScreenMode screenMode = ScreenMode::Windowed;
+    double splitSeperation = 5.0;
+    ViewMode viewMode = ViewMode::Split;
++
++   //! Pikmin 3 Recomp : fait pivoter l'image affichée de 180° (contournement, voir README).
++   bool rotate180 = false;
+ };
+ 
+ struct Settings
+diff --git a/src/libgpu/src/vulkan/vulkan_display.cpp b/src/libgpu/src/vulkan/vulkan_display.cpp
+index e96b29e..5cb730a 100644
+--- a/src/libgpu/src/vulkan/vulkan_display.cpp
++++ b/src/libgpu/src/vulkan/vulkan_display.cpp
+@@ -914,7 +914,7 @@ createBuffers(VulkanDisplayPipeline &displayPipeline,
+               vk::PhysicalDevice &physicalDevice,
+               vk::Device &device)
+ {
+-   static constexpr std::array<float, 24> vertices = {
++   std::array<float, 24> vertices = {
+       -1.0f,  1.0f,  0.0f,  1.0f,
+        1.0f,  1.0f,  1.0f,  1.0f,
+        1.0f, -1.0f,  1.0f,  0.0f,
+@@ -924,6 +924,14 @@ createBuffers(VulkanDisplayPipeline &displayPipeline,
+       -1.0f,  1.0f,  0.0f,  1.0f,
+    };
+ 
++   // Pikmin 3 Recomp : rotation de 180° à l'affichage = on inverse les coordonnées de texture.
++   if (gpu::config()->display.rotate180) {
++      for (auto i = 0u; i < 6; ++i) {
++         vertices[i * 4 + 2] = 1.0f - vertices[i * 4 + 2];
++         vertices[i * 4 + 3] = 1.0f - vertices[i * 4 + 3];
++      }
++   }
++
+    // Allocate buffer
+    auto bufferDesc = vk::BufferCreateInfo { };
+    bufferDesc.size = static_cast<uint32_t>(sizeof(float) * vertices.size());
+@@ -953,7 +961,7 @@ createBuffers(VulkanDisplayPipeline &displayPipeline,
+ 
+    // Upload vertices
+    auto mappedMemory = device.mapMemory(displayPipeline.vertexBufferMemory, 0, VK_WHOLE_SIZE);
+-   std::memcpy(mappedMemory, vertices.data(), bufferMemoryRequirements.size);
++   std::memcpy(mappedMemory, vertices.data(), sizeof(float) * vertices.size());
+ 
+    device.flushMappedMemoryRanges({
+       vk::MappedMemoryRange { displayPipeline.vertexBufferMemory, 0, VK_WHOLE_SIZE }
