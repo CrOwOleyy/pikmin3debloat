@@ -1,0 +1,138 @@
+[
+ {
+  "addr": 640,
+  "size": 12,
+  "name": "nndetailRoGetRoDataStart",
+  "kinds": [
+   "al",
+   "dp",
+   "ldst"
+  ]
+ },
+ {
+  "addr": 656,
+  "size": 12,
+  "name": "nndetailRoGetRoDataEnd",
+  "kinds": [
+   "al",
+   "dp",
+   "ldst"
+  ]
+ },
+ {
+  "addr": 676,
+  "size": 52,
+  "name": "FUN_600002a4",
+  "kinds": [
+   "al",
+   "dp",
+   "ldm",
+   "ldst"
+  ]
+ },
+ {
+  "addr": 11196,
+  "size": 140,
+  "name": "FUN_60002bbc",
+  "kinds": [
+   "al",
+   "b",
+   "cond",
+   "dp",
+   "ldst"
+  ]
+ },
+ {
+  "addr": 13512,
+  "size": 84,
+  "name": "FUN_600034c8",
+  "kinds": [
+   "al",
+   "dp",
+   "ldm",
+   "ldst"
+  ]
+ },
+ {
+  "addr": 59648,
+  "size": 36,
+  "name": "FUN_6000e900",
+  "kinds": [
+   "al",
+   "cond",
+   "dp",
+   "ldst"
+  ]
+ },
+ {
+  "addr": 120352,
+  "size": 84,
+  "name": "FUN_6001d620",
+  "kinds": [
+   "al",
+   "cond",
+   "dp",
+   "ldst"
+  ]
+ },
+ {
+  "addr": 135500,
+  "size": 76,
+  "name": "FUN_6002114c",
+  "kinds": [
+   "al",
+   "b",
+   "cond",
+   "dp",
+   "ldst"
+  ]
+ },
+ {
+  "addr": 309576,
+  "size": 80,
+  "name": "FUN_6004b948",
+  "kinds": [
+   "al",
+   "b",
+   "cond",
+   "dp"
+  ]
+ },
+ {
+  "addr": 2606152,
+  "size": 68,
+  "name": "FUN_6027c448",
+  "kinds": [
+   "al",
+   "b",
+   "cond",
+   "dp"
+  ]
+ },
+ {
+  "addr": 3467372,
+  "size": 96,
+  "name": "FUN_6034e86c",
+  "kinds": [
+   "al",
+   "b",
+   "cond",
+   "dp",
+   "ldm",
+   "ldst"
+  ]
+ },
+ {
+  "addr": 4644232,
+  "size": 156,
+  "name": "FUN_6046dd88",
+  "kinds": [
+   "al",
+   "b",
+   "cond",
+   "dp",
+   "ldm",
+   "ldst"
+  ]
+ }
+]

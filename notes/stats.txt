@@ -1,0 +1,21 @@
+language=ARM:LE:32:v8
+imageBase=60000000
+functions=45017 named=1208 thunks=1274
+definedStrings=17943
+block .text 60000000-610fdd60 r-x
+block .rodata 610fe000-610fe057 r--
+block .rel.dyn 610fe058-61412087 r--
+block .rel.plt 61412088-61413327 r--
+block .hash 61413328-614147e7 r--
+block .gnu.hash 614147e8-614148b7 r--
+block .dynsym 614148b8-61417227 r--
+block .dynstr 61417228-6141de1c r--
+block .rodata.1 6141de1d-61581f0b r--
+block .data 61582000-6174275b rw-
+block .dynamic 6174275c-6174281b rw-
+block .got.plt 6174281c-61743177 r--
+block .got 61743178-6175a68b r--
+block .data.1 6175a68c-6175a68f rw-
+block .init_array 6175a690-6175aae3 r--
+block .bss 6175b000-61eb404f rw-
+block EXTERNAL 61eb6000-62131fff rw-

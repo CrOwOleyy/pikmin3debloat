@@ -1,0 +1,54 @@
+# Nintendo Switch Game Dumps, Keys & Firmware
+*.nsp
+*.xci
+*.nca
+*.nso
+*.nro
+*.tik
+*.keys
+*.zip
+*.7z
+*.rar
+prod.keys
+title.keys
+
+# Heavy Work Directory & Extractions (ROMFS, raw NCA extractions, Ghidra DB)
+work/
+out/
+
+# Build artifacts & Binaries
+*.obj
+*.exe
+*.dll
+*.pdb
+*.lib
+*.a
+*.o
+*.exp
+*.ilk
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Tools directory (automatically downloaded via scripts/setup_tools.ps1)
+tools/ghidra/
+tools/ghidra-loader-dl/
+tools/nstool/
+tools/nvdisasm/
+tools/nvdisasm-dl/
+tools/nx2elf-src/
+tools/ssbu-recomp/
+tools/venv/
+tools/mxharness/
+
+# IDE & OS files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+Thumbs.db
+Desktop.ini

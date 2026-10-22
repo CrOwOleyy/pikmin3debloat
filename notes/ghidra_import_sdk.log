@@ -1,0 +1,89 @@
+INFO  Using log config file: jar:file:/C:/Users/youne/delivery/pikmin3debloat/tools/ghidra/ghidra_12.1.2_PUBLIC/Ghidra/Framework/Generic/lib/Generic.jar!/generic.log4j.xml (LoggingInitialization)  
+INFO  Using log file: C:\Users\youne\AppData\Roaming\ghidra\ghidra_12.1.2_PUBLIC\application.log (LoggingInitialization)  
+INFO  Loading user preferences: C:\Users\youne\AppData\Roaming\ghidra\ghidra_12.1.2_PUBLIC\preferences (Preferences)  
+INFO  Searching for classes... (ClassSearcher)  
+INFO  Class search complete (1735 ms) (ClassSearcher)  
+INFO  Initializing SSL Context (DefaultSSLContextInitializer)  
+INFO  Initializing Random Number Generator... (SecureRandomFactory)  
+INFO  Random Number Generator initialization complete: SHA1PRNG (SecureRandomFactory)  
+INFO  Trust manager disabled, cacerts have not been set (DefaultTrustManagerFactory)  
+INFO  Headless startup complete (6635 ms) (AnalyzeHeadless)  
+INFO  Class searcher loaded 59 extension points (20 false positives) (ClassSearcher)  
+INFO  HEADLESS Script Paths:
+    C:\Users\youne\delivery\pikmin3debloat\tools\ghidra\ghidra_12.1.2_PUBLIC\Ghidra\Processors\8051\ghidra_scripts
+    C:\Users\youne\delivery\pikmin3debloat\tools\ghidra\ghidra_12.1.2_PUBLIC\Ghidra\Features\DecompilerDependent\ghidra_scripts
+    C:\Users\youne\delivery\pikmin3debloat\tools\ghidra\ghidra_12.1.2_PUBLIC\Ghidra\Features\GnuDemangler\ghidra_scripts
+    C:\Users\youne\delivery\pikmin3debloat\tools\ghidra\ghidra_12.1.2_PUBLIC\Ghidra\Processors\PIC\ghidra_scripts
+    C:\Users\youne\delivery\pikmin3debloat\tools\ghidra\ghidra_12.1.2_PUBLIC\Ghidra\Features\BSim\ghidra_scripts
+    C:\Users\youne\delivery\pikmin3debloat\tools\ghidra\ghidra_12.1.2_PUBLIC\Ghidra\Features\FileFormats\ghidra_scripts
+    C:\Users\youne\delivery\pikmin3debloat\tools\ghidra\ghidra_12.1.2_PUBLIC\Ghidra\Features\PDB\ghidra_scripts
+    C:\Users\youne\delivery\pikmin3debloat\tools\ghidra\ghidra_12.1.2_PUBLIC\Ghidra\Features\BytePatterns\ghidra_scripts
+    C:\Users\youne\delivery\pikmin3debloat\tools\ghidra\ghidra_12.1.2_PUBLIC\Ghidra\Features\SwiftDemangler\ghidra_scripts
+    C:\Users\youne\delivery\pikmin3debloat\tools\ghidra\ghidra_12.1.2_PUBLIC\Ghidra\Features\FunctionID\ghidra_scripts
+    C:\Users\youne\delivery\pikmin3debloat\tools\ghidra\ghidra_12.1.2_PUBLIC\Ghidra\Features\Base\ghidra_scripts
+    C:\Users\youne\delivery\pikmin3debloat\tools\ghidra\ghidra_12.1.2_PUBLIC\Ghidra\Processors\JVM\ghidra_scripts
+    C:\Users\youne\delivery\pikmin3debloat\tools\ghidra\ghidra_12.1.2_PUBLIC\Ghidra\Features\MicrosoftCodeAnalyzer\ghidra_scripts
+    C:\Users\youne\delivery\pikmin3debloat\tools\ghidra\ghidra_12.1.2_PUBLIC\Ghidra\Features\WildcardAssembler\ghidra_scripts
+    C:\Users\youne\delivery\pikmin3debloat\tools\ghidra\ghidra_12.1.2_PUBLIC\Ghidra\Features\Decompiler\ghidra_scripts
+    C:\Users\youne\delivery\pikmin3debloat\tools\ghidra\ghidra_12.1.2_PUBLIC\Ghidra\Extensions\SwitchLoader\ghidra_scripts
+    C:\Users\youne\delivery\pikmin3debloat\tools\ghidra\ghidra_12.1.2_PUBLIC\Ghidra\Processors\DATA\ghidra_scripts
+    C:\Users\youne\delivery\pikmin3debloat\tools\ghidra\ghidra_12.1.2_PUBLIC\Ghidra\Debug\Debugger\ghidra_scripts
+    C:\Users\youne\delivery\pikmin3debloat\tools\ghidra\ghidra_12.1.2_PUBLIC\Ghidra\Features\SystemEmulation\ghidra_scripts
+    C:\Users\youne\delivery\pikmin3debloat\tools\ghidra\ghidra_12.1.2_PUBLIC\Ghidra\Features\PyGhidra\ghidra_scripts
+    C:\Users\youne\delivery\pikmin3debloat\tools\ghidra\ghidra_12.1.2_PUBLIC\Ghidra\Debug\Debugger-rmi-trace\ghidra_scripts
+    C:\Users\youne\delivery\pikmin3debloat\tools\ghidra\ghidra_12.1.2_PUBLIC\Ghidra\Features\VersionTracking\ghidra_scripts
+    C:\Users\youne\delivery\pikmin3debloat\tools\ghidra\ghidra_12.1.2_PUBLIC\Ghidra\Processors\Atmel\ghidra_scripts (HeadlessAnalyzer)  
+INFO  HEADLESS: execution starts (HeadlessAnalyzer)  
+INFO  Opening existing project: C:\Users\youne\delivery\pikmin3debloat\work\ghidra_project\Pikmin3 (HeadlessAnalyzer)  
+INFO  Opening project: C:\Users\youne\delivery\pikmin3debloat\work\ghidra_project\Pikmin3 (HeadlessProject)  
+INFO  REPORT: Processing input files:  (HeadlessAnalyzer)  
+INFO       project: C:\Users\youne\delivery\pikmin3debloat\work\ghidra_project\Pikmin3 (HeadlessAnalyzer)  
+INFO  IMPORTING: file:///C:/Users/youne/delivery/pikmin3debloat/work/exefs/sdk (HeadlessAnalyzer)  
+INFO  Using Loader: Nintendo Switch Binary (ProgramLoader)  
+INFO  Using Language/Compiler: ARM:LE:32:v8:default (ProgramLoader)  
+INFO  Using Library Search Path: [., C:\Windows\SysWOW64, C:\Program Files\Eclipse Adoptium\jdk-21.0.12.101-hotspot\bin, C:\Windows\Sun\Java\bin, C:\Windows\system32, C:\Windows, C:\Users\youne\bin, C:\Program Files\Git\mingw64\bin, C:\Program Files\Git\usr\local\bin, C:\Program Files\Git\usr\bin, C:\VulkanSDK\1.4.363.0\Bin, C:\Windows\System32\Wbem, C:\Windows\System32\WindowsPowerShell\v1.0, C:\Windows\System32\OpenSSH, C:\Program Files\Git\cmd, C:\Program Files\WireGuard, C:\Program Files\Tailscale, C:\Program Files\dotnet, C:\Program Files (x86)\Windows Kits\10\Windows Performance Toolkit, C:\Program Files (x86)\CMake\bin, C:\Program Files\GitHub CLI, C:\Program Files\WSL, C:\Program Files\nodejs, C:\Users\youne\.cargo\bin, C:\Users\youne\AppData\Local\Microsoft\WindowsApps, C:\Users\youne\AppData\Local\Programs\Microsoft VS Code\bin, C:\Users\youne\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-9.0.2-full_build\bin, C:\Users\youne\AppData\Local\Microsoft\WinGet\Packages\Kitware.CMake_Microsoft.Winget.Source_8wekyb3d8bbwe\cmake-4.4.4-windows-x86_64\bin, C:\Users\youne\AppData\Local\Programs\DockerDesktop\resources\bin, C:\Users\youne\.dotnet\tools, C:\Users\youne\AppData\Roaming\npm, C:\Users\youne\AppData\Local\Programs\Null, C:\Users\youne\AppData\Local\Microsoft\WinGet\Packages\Google.PlatformTools_Microsoft.Winget.Source_8wekyb3d8bbwe\platform-tools, C:\Users\youne\AppData\Local\Python\bin, C:\Users\youne\AppData\Local\Microsoft\WinGet\Packages\Ninja-build.Ninja_Microsoft.Winget.Source_8wekyb3d8bbwe, C:\Program Files\Git\usr\bin\vendor_perl, C:\Program Files\Git\usr\bin\core_perl] (ProgramLoader)  
+INFO  Created dyn block .dynstr at 0x65D8B4 of size 0x2ED193 (NXProgramBuilder)  
+INFO  Created dyn block .init_array at 0xA9DEE8 of size 0x1AC (NXProgramBuilder)  
+INFO  Created dyn block .fini_array at 0xA9E094 of size 0x8 (NXProgramBuilder)  
+INFO  Created dyn block .rel.dyn at 0x55C010 of size 0x2E9B8 (NXProgramBuilder)  
+INFO  Created dyn block .rel.plt at 0x58A9C8 of size 0xF4F0 (NXProgramBuilder)  
+INFO  Created dyn block .hash at 0x599EB8 of size 0x318E8 (NXProgramBuilder)  
+INFO  Created dyn block .gnu.hash at 0x5CB7A0 of size 0x2EF54 (NXProgramBuilder)  
+INFO  String table offset 605FA6F4, base addr 60000000 (NXProgramBuilder)  
+INFO  Processing JMPREL relocations... (ElfCompatibilityProvider)  
+INFO  Processing DT_REL relocations... (ElfCompatibilityProvider)  
+INFO  Created got from 0xA9C850 to 0xA9DEE8 (NXProgramBuilder)  
+INFO  Adding filler section .text from 60000000 to 6055b2c0 (MemoryBlockHelper)  
+INFO  Adding unique section .rodata from 6055c000 to 6055c010 (MemoryBlockHelper)  
+INFO  Adding unique section .rodata.1 from 6094aa47 to 60a65c28 (MemoryBlockHelper)  
+INFO  Adding unique section .data from 60a66000 to 60a94d1c (MemoryBlockHelper)  
+INFO  Created bss from 0x60A9F000 to 0x60B54F20 (NXProgramBuilder)  
+INFO  IMPORTING: Loaded 0 additional files (HeadlessAnalyzer)  
+INFO  /sdk: file created (youne) (LocalFileSystem)  
+INFO  REPORT: Save succeeded for: /sdk (Pikmin3:/sdk) (HeadlessAnalyzer)  
+INFO  REPORT: Import succeeded (HeadlessAnalyzer)  
+INFO  IMPORTING: file:///C:/Users/youne/delivery/pikmin3debloat/work/exefs/subsdk0 (HeadlessAnalyzer)  
+INFO  Using Loader: Nintendo Switch Binary (ProgramLoader)  
+INFO  Using Language/Compiler: ARM:LE:32:v8:default (ProgramLoader)  
+INFO  Using Library Search Path: [., C:\Windows\SysWOW64, C:\Program Files\Eclipse Adoptium\jdk-21.0.12.101-hotspot\bin, C:\Windows\Sun\Java\bin, C:\Windows\system32, C:\Windows, C:\Users\youne\bin, C:\Program Files\Git\mingw64\bin, C:\Program Files\Git\usr\local\bin, C:\Program Files\Git\usr\bin, C:\VulkanSDK\1.4.363.0\Bin, C:\Windows\System32\Wbem, C:\Windows\System32\WindowsPowerShell\v1.0, C:\Windows\System32\OpenSSH, C:\Program Files\Git\cmd, C:\Program Files\WireGuard, C:\Program Files\Tailscale, C:\Program Files\dotnet, C:\Program Files (x86)\Windows Kits\10\Windows Performance Toolkit, C:\Program Files (x86)\CMake\bin, C:\Program Files\GitHub CLI, C:\Program Files\WSL, C:\Program Files\nodejs, C:\Users\youne\.cargo\bin, C:\Users\youne\AppData\Local\Microsoft\WindowsApps, C:\Users\youne\AppData\Local\Programs\Microsoft VS Code\bin, C:\Users\youne\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-9.0.2-full_build\bin, C:\Users\youne\AppData\Local\Microsoft\WinGet\Packages\Kitware.CMake_Microsoft.Winget.Source_8wekyb3d8bbwe\cmake-4.4.4-windows-x86_64\bin, C:\Users\youne\AppData\Local\Programs\DockerDesktop\resources\bin, C:\Users\youne\.dotnet\tools, C:\Users\youne\AppData\Roaming\npm, C:\Users\youne\AppData\Local\Programs\Null, C:\Users\youne\AppData\Local\Microsoft\WinGet\Packages\Google.PlatformTools_Microsoft.Winget.Source_8wekyb3d8bbwe\platform-tools, C:\Users\youne\AppData\Local\Python\bin, C:\Users\youne\AppData\Local\Microsoft\WinGet\Packages\Ninja-build.Ninja_Microsoft.Winget.Source_8wekyb3d8bbwe, C:\Program Files\Git\usr\bin\vendor_perl, C:\Program Files\Git\usr\bin\core_perl] (ProgramLoader)  
+INFO  Created dyn block .dynstr at 0x4312A0 of size 0x7FCD1 (NXProgramBuilder)  
+INFO  Created dyn block .init_array at 0x577450 of size 0xB0 (NXProgramBuilder)  
+INFO  Created dyn block .fini_array at 0x577500 of size 0x10 (NXProgramBuilder)  
+INFO  Created dyn block .rel.dyn at 0x3B7014 of size 0x1E090 (NXProgramBuilder)  
+INFO  Created dyn block .rel.plt at 0x3D50A4 of size 0x76B8 (NXProgramBuilder)  
+INFO  Created dyn block .hash at 0x3DC75C of size 0x167D0 (NXProgramBuilder)  
+INFO  Created dyn block .gnu.hash at 0x3F2F2C of size 0x113E4 (NXProgramBuilder)  
+INFO  String table offset 60404310, base addr 60000000 (NXProgramBuilder)  
+INFO  Processing JMPREL relocations... (ElfCompatibilityProvider)  
+INFO  Processing DT_REL relocations... (ElfCompatibilityProvider)  
+INFO  Created got from 0x575FDC to 0x57744C (NXProgramBuilder)  
+INFO  Adding filler section .text from 60000000 to 603b6b20 (MemoryBlockHelper)  
+INFO  Adding unique section .rodata from 603b7000 to 603b7014 (MemoryBlockHelper)  
+INFO  Adding unique section .rodata.1 from 604b0f71 to 6055c588 (MemoryBlockHelper)  
+INFO  Adding unique section .data from 6055d000 to 605723cc (MemoryBlockHelper)  
+INFO  Adding unique section .data.1 from 6057744c to 60577450 (MemoryBlockHelper)  
+INFO  Created bss from 0x60578000 to 0x6060E630 (NXProgramBuilder)  
+INFO  IMPORTING: Loaded 0 additional files (HeadlessAnalyzer)  
+INFO  /subsdk0: file created (youne) (LocalFileSystem)  
+INFO  REPORT: Save succeeded for: /subsdk0 (Pikmin3:/subsdk0) (HeadlessAnalyzer)  
+INFO  REPORT: Import succeeded (HeadlessAnalyzer)  

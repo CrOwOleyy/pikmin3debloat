@@ -1,0 +1,118 @@
+INFO  Using log config file: jar:file:/C:/Users/youne/delivery/pikmin3debloat/tools/ghidra/ghidra_12.1.2_PUBLIC/Ghidra/Framework/Generic/lib/Generic.jar!/generic.log4j.xml (LoggingInitialization)  
+INFO  Using log file: C:\Users\youne\AppData\Roaming\ghidra\ghidra_12.1.2_PUBLIC\application.log (LoggingInitialization)  
+INFO  Loading user preferences: C:\Users\youne\AppData\Roaming\ghidra\ghidra_12.1.2_PUBLIC\preferences (Preferences)  
+INFO  Searching for classes... (ClassSearcher)  
+INFO  Class search complete (2621 ms) (ClassSearcher)  
+INFO  Initializing SSL Context (DefaultSSLContextInitializer)  
+INFO  Initializing Random Number Generator... (SecureRandomFactory)  
+INFO  Random Number Generator initialization complete: SHA1PRNG (SecureRandomFactory)  
+INFO  Trust manager disabled, cacerts have not been set (DefaultTrustManagerFactory)  
+INFO  Starting cache cleanup: C:\Users\youne\AppData\Local\ghidra\fscache2 (FileCacheMaintenanceDaemon)  
+INFO  Finished cache cleanup, estimated storage used: 0 (FileCacheMaintenanceDaemon)  
+INFO  Headless startup complete (9985 ms) (AnalyzeHeadless)  
+INFO  Class searcher loaded 59 extension points (20 false positives) (ClassSearcher)  
+INFO  HEADLESS Script Paths:
+    C:\Users\youne\delivery\pikmin3debloat\tools\ghidra\ghidra_12.1.2_PUBLIC\Ghidra\Processors\8051\ghidra_scripts
+    C:\Users\youne\delivery\pikmin3debloat\tools\ghidra\ghidra_12.1.2_PUBLIC\Ghidra\Features\DecompilerDependent\ghidra_scripts
+    C:\Users\youne\delivery\pikmin3debloat\tools\ghidra\ghidra_12.1.2_PUBLIC\Ghidra\Features\GnuDemangler\ghidra_scripts
+    C:\Users\youne\delivery\pikmin3debloat\tools\ghidra\ghidra_12.1.2_PUBLIC\Ghidra\Processors\PIC\ghidra_scripts
+    C:\Users\youne\delivery\pikmin3debloat\tools\ghidra\ghidra_12.1.2_PUBLIC\Ghidra\Features\BSim\ghidra_scripts
+    C:\Users\youne\delivery\pikmin3debloat\tools\ghidra\ghidra_12.1.2_PUBLIC\Ghidra\Features\FileFormats\ghidra_scripts
+    C:\Users\youne\delivery\pikmin3debloat\tools\ghidra\ghidra_12.1.2_PUBLIC\Ghidra\Features\PDB\ghidra_scripts
+    C:\Users\youne\delivery\pikmin3debloat\tools\ghidra\ghidra_12.1.2_PUBLIC\Ghidra\Features\BytePatterns\ghidra_scripts
+    C:\Users\youne\delivery\pikmin3debloat\tools\ghidra\ghidra_12.1.2_PUBLIC\Ghidra\Features\SwiftDemangler\ghidra_scripts
+    C:\Users\youne\delivery\pikmin3debloat\tools\ghidra\ghidra_12.1.2_PUBLIC\Ghidra\Features\FunctionID\ghidra_scripts
+    C:\Users\youne\delivery\pikmin3debloat\tools\ghidra\ghidra_12.1.2_PUBLIC\Ghidra\Features\Base\ghidra_scripts
+    C:\Users\youne\delivery\pikmin3debloat\tools\ghidra\ghidra_12.1.2_PUBLIC\Ghidra\Processors\JVM\ghidra_scripts
+    C:\Users\youne\delivery\pikmin3debloat\tools\ghidra\ghidra_12.1.2_PUBLIC\Ghidra\Features\MicrosoftCodeAnalyzer\ghidra_scripts
+    C:\Users\youne\delivery\pikmin3debloat\tools\ghidra\ghidra_12.1.2_PUBLIC\Ghidra\Features\WildcardAssembler\ghidra_scripts
+    C:\Users\youne\delivery\pikmin3debloat\tools\ghidra\ghidra_12.1.2_PUBLIC\Ghidra\Features\Decompiler\ghidra_scripts
+    C:\Users\youne\delivery\pikmin3debloat\tools\ghidra\ghidra_12.1.2_PUBLIC\Ghidra\Extensions\SwitchLoader\ghidra_scripts
+    C:\Users\youne\delivery\pikmin3debloat\tools\ghidra\ghidra_12.1.2_PUBLIC\Ghidra\Processors\DATA\ghidra_scripts
+    C:\Users\youne\delivery\pikmin3debloat\tools\ghidra\ghidra_12.1.2_PUBLIC\Ghidra\Debug\Debugger\ghidra_scripts
+    C:\Users\youne\delivery\pikmin3debloat\tools\ghidra\ghidra_12.1.2_PUBLIC\Ghidra\Features\SystemEmulation\ghidra_scripts
+    C:\Users\youne\delivery\pikmin3debloat\tools\ghidra\ghidra_12.1.2_PUBLIC\Ghidra\Features\PyGhidra\ghidra_scripts
+    C:\Users\youne\delivery\pikmin3debloat\tools\ghidra\ghidra_12.1.2_PUBLIC\Ghidra\Debug\Debugger-rmi-trace\ghidra_scripts
+    C:\Users\youne\delivery\pikmin3debloat\tools\ghidra\ghidra_12.1.2_PUBLIC\Ghidra\Features\VersionTracking\ghidra_scripts
+    C:\Users\youne\delivery\pikmin3debloat\tools\ghidra\ghidra_12.1.2_PUBLIC\Ghidra\Processors\Atmel\ghidra_scripts (HeadlessAnalyzer)  
+INFO  HEADLESS: execution starts (HeadlessAnalyzer)  
+INFO  Creating project: C:\Users\youne\delivery\pikmin3debloat\work\ghidra_project\Pikmin3 (HeadlessAnalyzer)  
+INFO  Creating project: C:\Users\youne\delivery\pikmin3debloat\work\ghidra_project\Pikmin3 (DefaultProject)  
+INFO  REPORT: Processing input files:  (HeadlessAnalyzer)  
+INFO       project: C:\Users\youne\delivery\pikmin3debloat\work\ghidra_project\Pikmin3 (HeadlessAnalyzer)  
+INFO  IMPORTING: file:///C:/Users/youne/delivery/pikmin3debloat/work/exefs/main (HeadlessAnalyzer)  
+INFO  Using Loader: Nintendo Switch Binary (ProgramLoader)  
+INFO  Using Language/Compiler: ARM:LE:32:v8:default (ProgramLoader)  
+INFO  Using Library Search Path: [., C:\Windows\SysWOW64, C:\Program Files\Eclipse Adoptium\jdk-21.0.12.101-hotspot\bin, C:\Windows\Sun\Java\bin, C:\Windows\system32, C:\Windows, C:\Users\youne\bin, C:\Program Files\Git\mingw64\bin, C:\Program Files\Git\usr\local\bin, C:\Program Files\Git\usr\bin, C:\Windows\System32\Wbem, C:\Windows\System32\WindowsPowerShell\v1.0, C:\Windows\System32\OpenSSH, C:\Program Files\Git\cmd, C:\Program Files\WireGuard, C:\Program Files\Tailscale, C:\Program Files\dotnet, C:\Program Files (x86)\Windows Kits\10\Windows Performance Toolkit, C:\Program Files (x86)\CMake\bin, C:\Program Files\GitHub CLI, C:\Program Files\WSL, C:\Program Files\nodejs, C:\Users\youne\.cargo\bin, C:\Users\youne\AppData\Local\Microsoft\WindowsApps, C:\Users\youne\AppData\Local\Programs\Microsoft VS Code\bin, C:\Users\youne\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-9.0.2-full_build\bin, C:\Users\youne\AppData\Local\Microsoft\WinGet\Packages\Kitware.CMake_Microsoft.Winget.Source_8wekyb3d8bbwe\cmake-4.4.4-windows-x86_64\bin, C:\Users\youne\AppData\Local\Programs\DockerDesktop\resources\bin, C:\Users\youne\.dotnet\tools, C:\Users\youne\AppData\Roaming\npm, C:\Users\youne\AppData\Local\Programs\Null, C:\Users\youne\AppData\Local\Microsoft\WinGet\Packages\Google.PlatformTools_Microsoft.Winget.Source_8wekyb3d8bbwe\platform-tools, C:\Users\youne\AppData\Local\Python\bin, C:\Program Files\Git\usr\bin\vendor_perl, C:\Program Files\Git\usr\bin\core_perl] (ProgramLoader)  
+INFO  Created dyn block .dynstr at 0x1417228 of size 0x6BF5 (NXProgramBuilder)  
+INFO  Created dyn block .init_array at 0x175A690 of size 0x454 (NXProgramBuilder)  
+INFO  Created dyn block .rel.dyn at 0x10FE058 of size 0x314030 (NXProgramBuilder)  
+INFO  Created dyn block .rel.plt at 0x1412088 of size 0x12A0 (NXProgramBuilder)  
+INFO  Created dyn block .hash at 0x1413328 of size 0x14C0 (NXProgramBuilder)  
+INFO  Created dyn block .gnu.hash at 0x14147E8 of size 0xD0 (NXProgramBuilder)  
+INFO  String table offset 614148B8, base addr 60000000 (NXProgramBuilder)  
+INFO  Processing JMPREL relocations... (ElfCompatibilityProvider)  
+INFO  Processing DT_REL relocations... (ElfCompatibilityProvider)  
+INFO  Created got from 0x1743178 to 0x175A68C (NXProgramBuilder)  
+INFO  Adding filler section .text from 60000000 to 610fdd60 (MemoryBlockHelper)  
+INFO  Adding unique section .rodata from 610fe000 to 610fe058 (MemoryBlockHelper)  
+INFO  Adding unique section .rodata.1 from 6141de1d to 61581f0c (MemoryBlockHelper)  
+INFO  Adding unique section .data from 61582000 to 6174275c (MemoryBlockHelper)  
+INFO  Adding unique section .data.1 from 6175a68c to 6175a690 (MemoryBlockHelper)  
+INFO  Created bss from 0x6175B000 to 0x61EB4050 (NXProgramBuilder)  
+INFO  IMPORTING: Loaded 0 additional files (HeadlessAnalyzer)  
+INFO  ANALYZING all memory and code: file:///C:/Users/youne/delivery/pikmin3debloat/work/exefs/main (HeadlessAnalyzer)  
+WARN  Decompiling 60eb0fa4, pcode error at 60eb10c0: Unable to resolve constructor at 60eb10c0 (DecompileCallback)  
+WARN  Decompiling 60f190f0, pcode error at 60f19a48: Unable to resolve constructor at 60f19a48 (DecompileCallback)  
+INFO  Packed database cache: C:\Users\youne\AppData\Local\ghidra\packed-db-cache (PackedDatabaseCache)  
+INFO  Applied data type archive: generic_clib (ApplyDataArchiveAnalyzer)  
+WARN  Unable to fully apply external demangled Address Table at 61f92000: __cxxabiv1::__class_type_info::vtable (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 61f96000: __cxxabiv1::__si_class_type_info::vtable (DemangledAddressTable)  
+WARN  Unable to fully apply external demangled Address Table at 61fad000: __cxxabiv1::__vmi_class_type_info::vtable (DemangledAddressTable)  
+WARN  Decompiling 60f2e0d8: Unable to read bytes at ram:61eab6f4 (DecompileCallback)  
+WARN  Decompiling 60f26c90: Unable to read bytes at ram:61eab5e0 (DecompileCallback)  
+WARN  Decompiling 60f30260: Unable to read bytes at ram:61eab7d4 (DecompileCallback)  
+WARN  Decompiling 60f2e0d8: Unable to read bytes at ram:61eab6f4 (DecompileCallback)  
+WARN  Decompiling 60f30260: Unable to read bytes at ram:61eab7d4 (DecompileCallback)  
+WARN  Decompiling 60f26c90: Unable to read bytes at ram:61eab5e0 (DecompileCallback)  
+WARN  Decompiling 60eb0fa4, pcode error at 60eb10c0: Unable to resolve constructor at 60eb10c0 (DecompileCallback)  
+WARN  Decompiling 60f190f0, pcode error at 60f19a48: Unable to resolve constructor at 60f19a48 (DecompileCallback)  
+INFO  -----------------------------------------------------
+    ARM Constant Reference Analyzer          438.526 secs
+    ARM Symbol                                 0.011 secs
+    ASCII Strings                              3.007 secs
+    Apply Data Archives                        2.074 secs
+    Call Convention ID                         4.400 secs
+    Call-Fixup Installer                      33.897 secs
+    Create Address Tables                      6.780 secs
+    Create Address Tables - One Time          68.625 secs
+    Create Function                           26.424 secs
+    Data Reference                            81.295 secs
+    Decompiler Parameter ID                  422.026 secs
+    Decompiler Switch Analysis              4104.444 secs
+    Demangler GNU                              2.472 secs
+    Disassemble                              150.214 secs
+    Disassemble Entry Points                   1.124 secs
+    Embedded Media                             0.686 secs
+    External Entry References                  0.003 secs
+    Function ID                                0.822 secs
+    Function Start Pre Search                  0.799 secs
+    Function Start Search                      5.166 secs
+    Function Start Search After Code          31.378 secs
+    Function Start Search After Data          16.511 secs
+    Function Start Search delayed - One Time   8.011 secs
+    Non-Returning Functions - Discovered      21.500 secs
+    Reference                                128.490 secs
+    Scalar Operand References                131.688 secs
+    Shared Return Calls                       26.064 secs
+    Stack                                    309.610 secs
+    Subroutine References                     65.037 secs
+    Subroutine References - One Time           0.237 secs
+-----------------------------------------------------
+     Total Time   6091 secs
+-----------------------------------------------------
+ (AutoAnalysisManager)  
+INFO  REPORT: Analysis succeeded for file: file:///C:/Users/youne/delivery/pikmin3debloat/work/exefs/main (HeadlessAnalyzer)  
+INFO  /main: file created (youne) (LocalFileSystem)  
+INFO  REPORT: Save succeeded for: /main (Pikmin3:/main) (HeadlessAnalyzer)  
+INFO  REPORT: Import succeeded (HeadlessAnalyzer)  
