@@ -147,8 +147,20 @@ void probeDumpVertexShader(uint32_t address)
     RT_INFO("SONDE shader de sommets 0x%08X (%u octets) :\n%s", address, size, text.c_str());
 }
 
+std::atomic<uint32_t> s_probeProgram { 0 }; // ringItemsize du shader de sommets lié (--probe)
+
 bool guardSetVertexShader(PPCContext& ctx)
 {
+    if (rt::g_probe && ctx.r3.u32)
+    {
+        s_probeProgram = rt::load32(ctx.r3.u32 + 0x10C);
+        static std::mutex lock;
+        static std::set<uint32_t> seen;
+        std::lock_guard guard(lock);
+        if (seen.insert(ctx.r3.u32).second && seen.size() <= 64)
+            RT_INFO("SONDE shader de sommets lié 0x%08X marqueur=%u (lr=0x%08X)", ctx.r3.u32, s_probeProgram.load(),
+                uint32_t(ctx.lr));
+    }
     static std::atomic<bool> warned { false };
     const bool ok = shaderHasProgram<cafe::gx2::GX2VertexShader>(ctx.r3.u32);
     if (ok && rt::g_probe)
@@ -214,7 +226,7 @@ void probeUniforms(const char* stage, PPCContext& ctx)
 {
     static std::atomic<uint32_t> calls { 0 };
     const uint32_t n = calls++;
-    if (n < 3000 || n >= 3080 || !ctx.r5.u32)
+    if (n < 3000 || n >= 4500 || !ctx.r5.u32)
         return;
     float v[4];
     for (int i = 0; i < 4; i++)
@@ -222,7 +234,8 @@ void probeUniforms(const char* stage, PPCContext& ctx)
         const uint32_t bits = rt::load32(ctx.r5.u32 + i * 4);
         memcpy(&v[i], &bits, 4);
     }
-    RT_INFO("SONDE %s offset=%d count=%u : %g %g %g %g", stage, int32_t(ctx.r3.u32), ctx.r4.u32, v[0], v[1], v[2], v[3]);
+    RT_INFO("SONDE prog=%u %s offset=%d count=%u : %g %g %g %g", s_probeProgram.load(), stage, int32_t(ctx.r3.u32),
+        ctx.r4.u32, v[0], v[1], v[2], v[3]);
 }
 
 bool guardSetUniformReg(PPCContext& ctx)
@@ -253,7 +266,16 @@ bool guardSetPixelUniformReg(PPCContext& ctx)
     return guardSetUniformReg(ctx);
 }
 
+// GX2SetShaders(fetch, vertex, pixel) : on note le programme lié pour les sondes.
+bool guardSetShaders(PPCContext& ctx)
+{
+    if (rt::g_probe && ctx.r4.u32)
+        s_probeProgram = rt::load32(ctx.r4.u32 + 0x10C);
+    return false;
+}
+
 const std::unordered_map<std::string, Guard> kGuards = {
+    { "GX2SetShaders", guardSetShaders },
     { "GX2SetVertexUniformReg", guardSetVertexUniformReg },
     { "GX2SetPixelUniformReg", guardSetPixelUniformReg },
     { "GX2SetPixelSampler", guardSetPixelSampler },

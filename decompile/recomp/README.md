@@ -304,6 +304,15 @@ noire, alors que le jeu envoie bien une copie vers l'écran TV par image (`--rec
 confirmer à l'œil** (clignotement ou non). Les options `--split` (TV + GamePad) et `--capture`
 (BMP dans `capture/`) aident à diagnostiquer.
 
+## lyt_BuildinShader.gsh reconstruit (2026-10-22)
+
+![Dialogue avec fenêtre et boutons](docs/dialogue_lyt.png)
+
+Le shader d'interface manquant est remplacé par des shaders écrits à la main en assembleur
+Latte (`shaders/lyt/`, voir son README) : les fenêtres, boutons et cadres de sélection
+s'affichent. Rendu approché (un seul mode de mélange de textures). Deux bugs de
+l'assembleur de decaf corrigés au passage (métadonnées jamais lues, masque de sortie).
+
 ## Affichage TV seul et commandes (2026-10-22)
 
 - **Affichage** : `gpu_window.cpp` règle libgpu en `ViewMode::TV`, fond noir, ratio conservé (au
