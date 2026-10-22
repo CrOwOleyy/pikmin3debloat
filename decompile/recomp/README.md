@@ -348,8 +348,16 @@ ligne 0) et c'est l'affichage final (`vulkan_display.cpp`) qui retourne l'image.
   Quand le jeu libère cette mémoire et y charge une texture, decaf gardait l'ancien contenu
   (aplats, pixels parasites). On garde maintenant l'empreinte de la mémoire au moment de
   l'écriture GPU : si elle change ensuite, c'est le CPU et ses données l'emportent.
+- **Profondeur D24S8 sur cartes AMD** (`vulkan_utils.cpp`, `vulkan_validate.cpp`) : le format
+  de profondeur du jeu (24 bits + stencil) n'est pas utilisable comme cible de profondeur sur
+  ces cartes ; decaf le créait quand même et les objets se recouvraient dans le désordre. Repli
+  automatique sur D32S8 quand le pilote ne le prend pas en charge.
+- **Journal de decaf** : avec `--probe`, les messages internes de libgpu (formats non pris en
+  charge, draws ignorés…) s'affichent sur la console.
 - **`--auto-a <ms>`** : appuie sur A toutes les `<ms>` ms, pour faire défiler les dialogues
   sans joueur (captures automatiques avec `--capture`).
+
+![Intro, forêt enneigée](docs/intro_foret.png)
 
 ## Affichage TV seul et commandes (2026-10-22)
 

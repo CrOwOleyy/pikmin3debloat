@@ -277,6 +277,75 @@ index 49b0258..14ba64e 100644
        // Rehash all our data
        auto dataState = cpu::getMemoryState(segment->address, segment->size);
  
+diff --git a/src/libgpu/src/vulkan/vulkan_utils.cpp b/src/libgpu/src/vulkan/vulkan_utils.cpp
+index 49414c3..b8ca605 100644
+--- a/src/libgpu/src/vulkan/vulkan_utils.cpp
++++ b/src/libgpu/src/vulkan/vulkan_utils.cpp
+@@ -7,6 +7,10 @@
+ namespace vulkan
+ {
+ 
++// Set by Driver::validateDevice when the device cannot use D24S8 as a depth attachment
++// (AMD hardware): such surfaces are then created as D32S8.
++bool gD24S8Fallback = false;
++
+ vk::Format
+ getVkSurfaceFormat(latte::SurfaceFormat format, latte::SQ_TILE_TYPE tileType)
+ {
+@@ -17,9 +21,9 @@ getVkSurfaceFormat(latte::SurfaceFormat format, latte::SQ_TILE_TYPE tileType)
+       case latte::SurfaceFormat::R32Float:
+          return vk::Format::eD32Sfloat;
+       case latte::SurfaceFormat::D24UnormS8Uint:
+-         return vk::Format::eD24UnormS8Uint;
++         return gD24S8Fallback ? vk::Format::eD32SfloatS8Uint : vk::Format::eD24UnormS8Uint;
+       case latte::SurfaceFormat::X24G8Uint:
+-         return vk::Format::eD24UnormS8Uint; // Remapped?
++         return gD24S8Fallback ? vk::Format::eD32SfloatS8Uint : vk::Format::eD24UnormS8Uint; // Remapped?
+       case latte::SurfaceFormat::D32FloatS8UintX24:
+          return vk::Format::eD32SfloatS8Uint; // Wrong Size?
+       case latte::SurfaceFormat::D32G8UintX24:
+@@ -83,9 +87,9 @@ getVkSurfaceFormat(latte::SurfaceFormat format, latte::SQ_TILE_TYPE tileType)
+    case latte::SurfaceFormat::R16G16Float:
+       return vk::Format::eR16G16Sfloat;
+    case latte::SurfaceFormat::D24UnormS8Uint:
+-      return vk::Format::eD24UnormS8Uint;
++      return gD24S8Fallback ? vk::Format::eD32SfloatS8Uint : vk::Format::eD24UnormS8Uint;
+    case latte::SurfaceFormat::X24G8Uint:
+-      return vk::Format::eD24UnormS8Uint; // Not sure if this is actually right...
++      return gD24S8Fallback ? vk::Format::eD32SfloatS8Uint : vk::Format::eD24UnormS8Uint; // Not sure if this is actually right...
+    case latte::SurfaceFormat::R11G11B10Float:
+       return vk::Format::eB10G11R11UfloatPack32; // This is the incorrect format...
+       //return vk::Format::eB10G11R11UfloatPack32; // Remapped?
+diff --git a/src/libgpu/src/vulkan/vulkan_utils.h b/src/libgpu/src/vulkan/vulkan_utils.h
+index db7672d..c25159c 100644
+--- a/src/libgpu/src/vulkan/vulkan_utils.h
++++ b/src/libgpu/src/vulkan/vulkan_utils.h
+@@ -26,6 +26,8 @@ enum SurfaceFormatUsage : uint32_t
+ vk::Format
+ getVkSurfaceFormat(latte::SurfaceFormat format, latte::SQ_TILE_TYPE tileType);
+ 
++extern bool gD24S8Fallback;
++
+ vk::ComponentSwizzle
+ getVkComponentSwizzle(latte::SQ_SEL sel);
+ 
+diff --git a/src/libgpu/src/vulkan/vulkan_validate.cpp b/src/libgpu/src/vulkan/vulkan_validate.cpp
+index 612ef10..a57f520 100644
+--- a/src/libgpu/src/vulkan/vulkan_validate.cpp
++++ b/src/libgpu/src/vulkan/vulkan_validate.cpp
+@@ -86,6 +86,12 @@ auto supportedDepthFormats = {
+ void
+ Driver::validateDevice()
+ {
++   auto d24s8Props = mPhysDevice.getFormatProperties(vk::Format::eD24UnormS8Uint);
++   if (!(d24s8Props.optimalTilingFeatures & vk::FormatFeatureFlagBits::eDepthStencilAttachment)) {
++      gLog->warn("D24S8 is not a supported depth attachment, using D32S8 instead");
++      gD24S8Fallback = true;
++   }
++
+    // TODO: Decide what is a hard requirement and what is optional
+    auto checkFormat = [&](latte::SurfaceFormat format, latte::SQ_TILE_TYPE tileType)
+    {
 diff --git a/src/libgpu/src/vulkan/vulkan_viewscissor.cpp b/src/libgpu/src/vulkan/vulkan_viewscissor.cpp
 index 5789428..be3331a 100644
 --- a/src/libgpu/src/vulkan/vulkan_viewscissor.cpp

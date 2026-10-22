@@ -1,6 +1,9 @@
 // Fenêtre Win32 + pilote Vulkan de libgpu (decaf). Le pilote consomme le ring PM4 sur son
 // propre thread et présente l'image TV dans la fenêtre ; le thread principal du processus
 // pompe les messages Windows tant que le jeu tourne.
+#include <common/log.h>
+#include <spdlog/spdlog.h>
+#include <spdlog/sinks/stdout_sinks.h>
 #include "runtime.h"
 
 #define WIN32_LEAN_AND_MEAN
@@ -101,6 +104,14 @@ void gpuStart()
    // libgpu lit la mémoire invitée via ces bases ; adresses physiques = virtuelles.
    cpu::internal::BaseVirtualAddress = reinterpret_cast<uintptr_t>(g_base);
    cpu::internal::BasePhysicalAddress = reinterpret_cast<uintptr_t>(g_base);
+
+   // --probe : journal interne de decaf (draws ignorés, erreurs de shader…) sur stderr.
+   if (rt::g_probe)
+   {
+      auto logger = std::make_shared<spdlog::logger>("decaf", std::make_shared<spdlog::sinks::stderr_sink_mt>());
+      logger->set_level(spdlog::level::debug);
+      gLog = logger;
+   }
 
    WNDCLASSEXW wc {};
    wc.cbSize = sizeof(wc);
