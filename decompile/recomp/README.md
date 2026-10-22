@@ -272,7 +272,7 @@ contexte (`hleSetImplementation`, `exportHostFunction(fn, user)`).
 
 Le jeu va maintenant **jusqu'à sa première question** - « Voulez-vous que Nintendo vous envoie les
 données des classements mondiaux … via SpotPass ? - Non / Oui » - en français, police et
-animation d'apparition du texte comprises (`--rotate180` pour la voir à l'endroit, voir plus bas).
+animation d'apparition du texte comprises.
 
 Ce qui a débloqué la suite après `lyt_BuildinShader.gsh` abîmé (garde-fous dans
 `gpu/bridge/decaf_bridge.cpp`, devant les appels GX2) :
@@ -285,17 +285,18 @@ Ce qui a débloqué la suite après `lyt_BuildinShader.gsh` abîmé (garde-fous 
   par cœur ; avec « toujours cœur 1 », deux listes d'affichage s'écrasaient).
 - Tous les imports GX2 du jeu sont couverts par decaf, sauf `GX2SetDebugMode` (sans effet).
 
-⚠️ **Problème connu - image tournée de 180°.** Sans option, l'image est retournée haut/bas **et**
-gauche/droite (« Non » devient « uoN »). Vérifié : ni le viewport (YSCALE négatif, comme sur la
-console), ni la copie vers l'écran, ni le décodeur paired-singles (comparé à l'interpréteur de
-decaf), ni les arguments GX2 (viewport 1280×720 correct) ne sont en cause ; le shader de decaf
-inverse déjà Y lui-même. Les positions arrivent donc négées en X **et** Y avant la rasterisation :
-cause encore inconnue (donnée envoyée par le jeu, ou calcul flottant recompilé). Piste :
-retrouver la fonction du jeu qui construit la matrice de projection et comparer son résultat à
-celui de l'interpréteur de decaf.
-Contournement : `pikmin3.exe --rotate180` fait pivoter l'image à l'affichage (patch de
-`vulkan_display.cpp`, réglage `display.rotate180`). À ne pas considérer comme la correction : si
-la cause est dans le rendu, les rendus vers texture seront faux.
+**Corrigé - image tournée de 180° (ps1 des opérations scalaires).** L'image sortait retournée
+haut/bas **et** gauche/droite. Les sondes (`--probe`, `runtime/probe.cpp`) ont montré que
+`MTX44Concat` (0x03463540) calcule un produit exact, et que les sources (viewport, copie vers
+l'écran, arguments GX2) étaient bonnes ; la matrice modèle-vue envoyée au GPU valait déjà
+`-1.1 0 0 -155 | 0 -1.1 0 115 | 0 0 1 -989` : une rotation de 180° autour de Z, calculée côté CPU
+(axes X et Y de la caméra inversés). Cause, trouvée en comparant la sémantique du recompilateur à
+l'interpréteur de decaf : sur l'Espresso, **les opérations scalaires simple précision écrivent
+leur résultat dans ps0 *et* ps1** (`lfs`/`lfsu`/`lfsx`/`lfsux`, `fadds`, `fsubs`, `fmuls`,
+`fdivs`, `fmadds`, `fmsubs`, `fnmadds`, `fnmsubs`, `fres`, `frsp`). XenonRecomp, écrit pour la
+Xbox 360, n'écrivait que ps0 : le jeu lisait ensuite un ps1 périmé (`ps_merge10`, `ps_sum0`,
+`ps_mul`…). Correctif dans `XenonRecomp/recompiler.cpp` (`splatPs1`), code régénéré : image à
+l'endroit sans contournement (l'option `--rotate180` a été retirée).
 
 Autres observations : sur mes captures (`--capture`, `PrintWindow`), environ 1 image sur 3 est
 noire, alors que le jeu envoie bien une copie vers l'écran TV par image (`--record ScanBuffer` :
@@ -354,7 +355,7 @@ python scripts\gen_recomp_config.py extracted\carrot.elf recomp\carrot_linked.el
 tools\XenonRecomp\build-win\XenonRecomp\XenonRecomp.exe recomp\config\carrot.toml recomp\runtime\ppc_context.h
 :: 3. Exécutable (vcvars64 + clang-cl + Ninja, configure au premier appel)
 recomp\build.bat
-recomp\build\pikmin3.exe            :: options : --rotate180 --split --capture --input-test --dump <s> --record <filtre> --trace --root <dossier des données>
+recomp\build\pikmin3.exe            :: options : --split --capture --input-test --dump <s> --record <filtre> --trace --root <dossier des données>
 ```
 
 Le runtime (`runtime/`) : mémoire invitée 4 Gio (`memory.cpp`), table des fonctions et appels

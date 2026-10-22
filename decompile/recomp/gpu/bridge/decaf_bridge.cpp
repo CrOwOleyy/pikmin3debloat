@@ -178,141 +178,8 @@ bool guardSetGeometryShader(PPCContext& ctx)
     return !ok;
 }
 
-bool guardSetVertexUniformBlock(PPCContext& ctx); // défini avec les SLOT_GUARD, plus bas
-
-// Diagnostic (--probe) : tampons d'attributs et blocs uniformes liés, relus au moment du dessin.
-struct BoundBuffer
+bool guardDraw(PPCContext&)
 {
-    uint32_t address = 0, size = 0, stride = 0;
-};
-BoundBuffer s_attribBuffers[16];
-BoundBuffer s_vsUniformBlocks[16];
-
-bool guardSetAttribBuffer(PPCContext& ctx)
-{
-    // GX2SetAttribBuffer(index, size, stride, buffer)
-    if (rt::g_probe && ctx.r3.u32 < 16)
-        s_attribBuffers[ctx.r3.u32] = { ctx.r6.u32, ctx.r4.u32, ctx.r5.u32 };
-    return false;
-}
-
-bool guardRecordVertexUniformBlock(PPCContext& ctx)
-{
-    // GX2SetVertexUniformBlock(location, size, data)
-    if (rt::g_probe && ctx.r3.u32 < 16)
-        s_vsUniformBlocks[ctx.r3.u32] = { ctx.r5.u32, ctx.r4.u32, 0 };
-    return guardSetVertexUniformBlock(ctx);
-}
-
-void probeFloats(const char* label, uint32_t address, uint32_t count)
-{
-    std::string text;
-    for (uint32_t i = 0; i < count; i++)
-    {
-        const uint32_t bits = rt::load32(address + i * 4);
-        float f;
-        memcpy(&f, &bits, 4);
-        char buf[24];
-        snprintf(buf, sizeof(buf), "%s%.4g", i && i % 4 == 0 ? " | " : " ", f);
-        text += buf;
-    }
-    RT_INFO("   %s @%08X :%s", label, address, text.c_str());
-}
-
-struct UniformUpload
-{
-    uint32_t offset, count;
-    float values[16];
-};
-std::vector<UniformUpload> s_uploadsSinceDraw;
-
-// Dernière matrice envoyée par GX2SetVertexUniformReg (16 flottants, valeurs au moment de l'appel).
-float s_lastVsMatrix[16];
-bool s_haveVsMatrix = false;
-
-float guestFloatAt(uint32_t addr)
-{
-    const uint32_t bits = rt::load32(addr);
-    float f;
-    memcpy(&f, &bits, 4);
-    return f;
-}
-
-// Coordonnées de clip (x, y) de chaque sommet du tampon d'attributs `buffer`, via la dernière
-// matrice : clip = C_i . (x, y, 0, 1) avec C_i = lignes 0 et 1 des 16 flottants envoyés.
-void probeClipBounds(const BoundBuffer& b, uint32_t index)
-{
-    if (!b.address || !s_haveVsMatrix || b.stride < 8)
-        return;
-    const uint32_t count = std::min(b.size / b.stride, 4096u);
-    float minX = 1e30f, maxX = -1e30f, minY = 1e30f, maxY = -1e30f;
-    uint32_t used = 0;
-    for (uint32_t v = 0; v < count; v++)
-    {
-        const float x = guestFloatAt(b.address + v * b.stride), y = guestFloatAt(b.address + v * b.stride + 4);
-        if (!std::isfinite(x) || !std::isfinite(y) || std::fabs(x) > 1e6f || std::fabs(y) > 1e6f)
-            continue;
-        const float cx = s_lastVsMatrix[0] * x + s_lastVsMatrix[1] * y + s_lastVsMatrix[3];
-        const float cy = s_lastVsMatrix[4] * x + s_lastVsMatrix[5] * y + s_lastVsMatrix[7];
-        minX = std::min(minX, cx); maxX = std::max(maxX, cx);
-        minY = std::min(minY, cy); maxY = std::max(maxY, cy);
-        used++;
-    }
-    if (used)
-        RT_INFO("   tampon %u (%u sommets, stride %u) : clip x [%.3f .. %.3f]  y [%.3f .. %.3f]", index, used,
-            b.stride, minX, maxX, minY, maxY);
-}
-
-void probeDraw(PPCContext& ctx)
-{
-    static std::atomic<uint32_t> draws { 0 };
-    const uint32_t n = draws++;
-    if (n >= 3000 && n < 3012)
-    {
-        RT_INFO("SONDE dessin #%u mode=%u count=%u : %zu envois de constantes VS depuis le dernier dessin", n,
-            ctx.r3.u32, ctx.r4.u32, s_uploadsSinceDraw.size());
-        for (const auto& u : s_uploadsSinceDraw)
-        {
-            std::string text;
-            for (uint32_t i = 0; i < std::min(u.count, 16u); i++)
-            {
-                char buf[24];
-                snprintf(buf, sizeof(buf), "%s%.4g", i && i % 4 == 0 ? " | " : " ", u.values[i]);
-                text += buf;
-            }
-            RT_INFO("     offset=%u count=%u :%s", u.offset, u.count, text.c_str());
-        }
-        for (uint32_t i = 0; i < 2; i++)
-            if (s_attribBuffers[i].address && ctx.r4.u32 >= 100)
-            {
-                // Premier sommet de chaque quad : (x, y) de quelques glyphes répartis dans le tampon.
-                const auto& b = s_attribBuffers[i];
-                const uint32_t total = b.size / b.stride;
-                for (uint32_t v = 0; v < total; v += total / 6 / 4 * 4 + 4)
-                    RT_INFO("     glyphe quad@sommet %u : x=%.1f y=%.1f u=%.3f v=%.3f", v,
-                        guestFloatAt(b.address + v * b.stride), guestFloatAt(b.address + v * b.stride + 4),
-                        guestFloatAt(b.address + v * b.stride + 16), guestFloatAt(b.address + v * b.stride + 20));
-            }
-    }
-    s_uploadsSinceDraw.clear();
-    if (n < 3000 || n >= 3002)
-        return;
-    RT_INFO("SONDE dessin #%u mode=%u count=%u", n, ctx.r3.u32, ctx.r4.u32);
-    for (uint32_t i = 0; i < 16; i++)
-        if (s_attribBuffers[i].address)
-            probeFloats(("attributs tampon " + std::to_string(i) + " (stride " +
-                std::to_string(s_attribBuffers[i].stride) + ")").c_str(), s_attribBuffers[i].address,
-                std::min(s_attribBuffers[i].size / 4, 24u));
-    for (uint32_t i = 0; i < 16; i++)
-        if (s_vsUniformBlocks[i].address)
-            probeFloats(("bloc uniforme VS " + std::to_string(i)).c_str(), s_vsUniformBlocks[i].address,
-                std::min(s_vsUniformBlocks[i].size / 4, 16u));
-}
-
-bool guardDraw(PPCContext& ctx)
-{
-    if (rt::g_probe)
-        probeDraw(ctx);
     if (!s_vertexShaderMissing && !s_pixelShaderMissing)
         return false;
     const uint32_t n = ++s_skippedDraws;
@@ -342,8 +209,6 @@ SLOT_GUARD(SetGeometryUniformBlock, r3, 0x10)
 // GX2Set{Vertex,Pixel}UniformReg(offset, count, data) : `offset` compte des vecteurs de 4 mots ;
 // les 16 bits hauts désignent une constante de boucle (32 au plus). Chaque étage dispose de
 // 256 vecteurs (1024 mots).
-bool guardRecordVsUniformReg(PPCContext& ctx);
-
 bool guardSetUniformReg(PPCContext& ctx)
 {
     static std::atomic<bool> warned { false };
@@ -357,27 +222,8 @@ bool guardSetUniformReg(PPCContext& ctx)
     return true;
 }
 
-bool guardRecordVsUniformReg(PPCContext& ctx)
-{
-    // GX2SetVertexUniformReg(offset, count, data) : on mémorise tous les envois depuis le dernier dessin.
-    if (rt::g_probe && ctx.r5.u32 && ctx.r4.u32 <= 4096 && s_uploadsSinceDraw.size() < 16)
-    {
-        UniformUpload u { ctx.r3.u32, ctx.r4.u32, {} };
-        for (uint32_t i = 0; i < std::min(ctx.r4.u32, 16u); i++)
-            u.values[i] = guestFloatAt(ctx.r5.u32 + i * 4);
-        s_uploadsSinceDraw.push_back(u);
-        if (ctx.r3.u32 == 0 && ctx.r4.u32 >= 16)
-        {
-            memcpy(s_lastVsMatrix, u.values, sizeof(s_lastVsMatrix));
-            s_haveVsMatrix = true;
-        }
-    }
-    return guardSetUniformReg(ctx);
-}
-
 const std::unordered_map<std::string, Guard> kGuards = {
-    { "GX2SetAttribBuffer", guardSetAttribBuffer },
-    { "GX2SetVertexUniformReg", guardRecordVsUniformReg },
+    { "GX2SetVertexUniformReg", guardSetUniformReg },
     { "GX2SetPixelUniformReg", guardSetUniformReg },
     { "GX2SetPixelSampler", guardSetPixelSampler },
     { "GX2SetVertexSampler", guardSetVertexSampler },
@@ -389,7 +235,7 @@ const std::unordered_map<std::string, Guard> kGuards = {
     { "GX2SetVertexSamplerBorderColor", guardSetVertexSamplerBorderColor },
     { "GX2SetGeometrySamplerBorderColor", guardSetGeometrySamplerBorderColor },
     { "GX2SetPixelUniformBlock", guardSetPixelUniformBlock },
-    { "GX2SetVertexUniformBlock", guardRecordVertexUniformBlock },
+    { "GX2SetVertexUniformBlock", guardSetVertexUniformBlock },
     { "GX2SetGeometryUniformBlock", guardSetGeometryUniformBlock },
     { "GX2SetVertexShader", guardSetVertexShader },
     { "GX2SetPixelShader", guardSetPixelShader },

@@ -94,7 +94,6 @@ void tclInit();
 void inputSetWindow(void* window);
 
 bool g_captureWindow = false;
-bool g_rotate180 = false; // --rotate180 : contournement, image pivotée de 180° à l'affichage
 bool g_splitView = false; // --split : écran TV + GamePad (disposition de decaf)
 
 void gpuStart()
@@ -127,7 +126,6 @@ void gpuStart()
    auto settings = *gpu::config();
    settings.display.viewMode = g_splitView ? gpu::DisplaySettings::Split : gpu::DisplaySettings::TV;
    settings.display.backgroundColour = { 0, 0, 0 };
-   settings.display.rotate180 = g_rotate180;
    settings.display.maintainAspectRatio = true;
    gpu::setConfig(settings);
 

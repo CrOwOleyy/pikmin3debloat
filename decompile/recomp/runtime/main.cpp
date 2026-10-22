@@ -25,7 +25,6 @@ void gpuStart();
 void gpuMessageLoop(void* gameThread);
 extern bool g_captureWindow;
 extern bool g_splitView;
-extern bool g_rotate180;
 extern bool g_probe;
 }
 
@@ -183,8 +182,6 @@ int main(int argc, char** argv)
             g_captureWindow = true;
         else if (a == "--split")
             g_splitView = true;
-        else if (a == "--rotate180")
-            g_rotate180 = true;
         else if (a == "--probe")
             g_probe = true;
         else if (a == "--input-test")

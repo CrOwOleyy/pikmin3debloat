@@ -1,5 +1,5 @@
 diff --git a/XenonRecomp/recompiler.cpp b/XenonRecomp/recompiler.cpp
-index fa91527..2018c64 100644
+index fa91527..e694fb5 100644
 --- a/XenonRecomp/recompiler.cpp
 +++ b/XenonRecomp/recompiler.cpp
 @@ -174,22 +174,32 @@ void Recompiler::Analyse()
@@ -83,7 +83,7 @@ index fa91527..2018c64 100644
                  image.symbols.emplace(fmt::format("sub_{:X}", fn.base), fn.base, fn.size, Symbol_Function);
  
                  base += fn.size;
-@@ -288,6 +317,22 @@ bool Recompiler::Recompile(
+@@ -288,6 +317,31 @@ bool Recompiler::Recompile(
              return fmt::format("ctx.f{}", index);
          };
  
@@ -103,10 +103,19 @@ index fa91527..2018c64 100644
 +                println("\t{{ double _t0 = {}; double _t1 = {}; {}.f64 = _t0; {}.f64 = _t1; }}", e0, e1, f(d), ps1(d));
 +        };
 +
++    // Espresso/Gekko en mode paired-single : les opérations scalaires simple précision (lfs,
++    // fadds, fmuls, fmadds, frsp, fres…) écrivent leur résultat dans ps0 ET ps1 - voir
++    // l'interpréteur de decaf (interpreter_float.cpp, interpreter_loadstore.cpp). Le jeu
++    // s'appuie dessus (ps_merge10, ps_sum0, ps_mul… lisent ps1 juste après un lfs).
++    auto splatPs1 = [&](uint32_t d)
++        {
++            println("\t{}.f64 = {}.f64;", ps1(d), f(d));
++        };
++
      auto v = [&](size_t index)
          {
              if ((config.nonArgumentRegistersAsLocalVariables && (index >= 32 && index <= 63)) ||
-@@ -399,7 +444,10 @@ bool Recompiler::Recompile(
+@@ -399,7 +453,10 @@ bool Recompiler::Recompile(
                  }
                  else
                  {
@@ -117,7 +126,7 @@ index fa91527..2018c64 100644
                  }
              }
          };
-@@ -607,7 +655,33 @@ bool Recompiler::Recompile(
+@@ -607,7 +664,33 @@ bool Recompiler::Recompile(
          break;
  
      case PPC_INST_BCTR:
@@ -152,7 +161,83 @@ index fa91527..2018c64 100644
          {
              println("\tswitch ({}.u64) {{", r(switchTable->second.r));
  
-@@ -1043,7 +1117,9 @@ bool Recompiler::Recompile(
+@@ -883,6 +966,7 @@ bool Recompiler::Recompile(
+     case PPC_INST_FADDS:
+         printSetFlushMode(false);
+         println("\t{}.f64 = double(float({}.f64 + {}.f64));", f(insn.operands[0]), f(insn.operands[1]), f(insn.operands[2]));
++        splatPs1(insn.operands[0]);
+         break;
+ 
+     case PPC_INST_FCFID:
+@@ -918,6 +1002,7 @@ bool Recompiler::Recompile(
+     case PPC_INST_FDIVS:
+         printSetFlushMode(false);
+         println("\t{}.f64 = double(float({}.f64 / {}.f64));", f(insn.operands[0]), f(insn.operands[1]), f(insn.operands[2]));
++        splatPs1(insn.operands[0]);
+         break;
+ 
+     case PPC_INST_FMADD:
+@@ -928,6 +1013,7 @@ bool Recompiler::Recompile(
+     case PPC_INST_FMADDS:
+         printSetFlushMode(false);
+         println("\t{}.f64 = double(float({}.f64 * {}.f64 + {}.f64));", f(insn.operands[0]), f(insn.operands[1]), f(insn.operands[2]), f(insn.operands[3]));
++        splatPs1(insn.operands[0]);
+         break;
+ 
+     case PPC_INST_FMR:
+@@ -943,6 +1029,7 @@ bool Recompiler::Recompile(
+     case PPC_INST_FMSUBS:
+         printSetFlushMode(false);
+         println("\t{}.f64 = double(float({}.f64 * {}.f64 - {}.f64));", f(insn.operands[0]), f(insn.operands[1]), f(insn.operands[2]), f(insn.operands[3]));
++        splatPs1(insn.operands[0]);
+         break;
+ 
+     case PPC_INST_FMUL:
+@@ -953,6 +1040,7 @@ bool Recompiler::Recompile(
+     case PPC_INST_FMULS:
+         printSetFlushMode(false);
+         println("\t{}.f64 = double(float({}.f64 * {}.f64));", f(insn.operands[0]), f(insn.operands[1]), f(insn.operands[2]));
++        splatPs1(insn.operands[0]);
+         break;
+ 
+     case PPC_INST_FNABS:
+@@ -968,6 +1056,7 @@ bool Recompiler::Recompile(
+     case PPC_INST_FNMADDS:
+         printSetFlushMode(false);
+         println("\t{}.f64 = double(float(-({}.f64 * {}.f64 + {}.f64)));", f(insn.operands[0]), f(insn.operands[1]), f(insn.operands[2]), f(insn.operands[3]));
++        splatPs1(insn.operands[0]);
+         break;
+ 
+     case PPC_INST_FNMSUB:
+@@ -978,16 +1067,19 @@ bool Recompiler::Recompile(
+     case PPC_INST_FNMSUBS:
+         printSetFlushMode(false);
+         println("\t{}.f64 = double(float(-({}.f64 * {}.f64 - {}.f64)));", f(insn.operands[0]), f(insn.operands[1]), f(insn.operands[2]), f(insn.operands[3]));
++        splatPs1(insn.operands[0]);
+         break;
+ 
+     case PPC_INST_FRES:
+         printSetFlushMode(false);
+         println("\t{}.f64 = float(1.0 / {}.f64);", f(insn.operands[0]), f(insn.operands[1]));
++        splatPs1(insn.operands[0]);
+         break;
+ 
+     case PPC_INST_FRSP:
+         printSetFlushMode(false);
+         println("\t{}.f64 = double(float({}.f64));", f(insn.operands[0]), f(insn.operands[1]));
++        splatPs1(insn.operands[0]);
+         break;
+ 
+     case PPC_INST_FSEL:
+@@ -1013,6 +1105,7 @@ bool Recompiler::Recompile(
+     case PPC_INST_FSUBS:
+         printSetFlushMode(false);
+         println("\t{}.f64 = double(float({}.f64 - {}.f64));", f(insn.operands[0]), f(insn.operands[1]), f(insn.operands[2]));
++        splatPs1(insn.operands[0]);
+         break;
+ 
+     case PPC_INST_LBZ:
+@@ -1043,7 +1136,9 @@ bool Recompiler::Recompile(
          break;
  
      case PPC_INST_LDARX:
@@ -163,7 +248,23 @@ index fa91527..2018c64 100644
          if (insn.operands[1] != 0)
              print("{}.u32 + ", r(insn.operands[1]));
          println("{}.u32);", r(insn.operands[2]));
-@@ -1187,7 +1263,9 @@ bool Recompiler::Recompile(
+@@ -1086,6 +1181,7 @@ bool Recompiler::Recompile(
+             print("{}.u32 + ", r(insn.operands[2]));
+         println("{});", int32_t(insn.operands[1]));
+         println("\t{}.f64 = double({}.f32);", f(insn.operands[0]), temp());
++        splatPs1(insn.operands[0]);
+         break;
+ 
+     case PPC_INST_LFSX:
+@@ -1095,6 +1191,7 @@ bool Recompiler::Recompile(
+             print("{}.u32 + ", r(insn.operands[1]));
+         println("{}.u32);", r(insn.operands[2]));
+         println("\t{}.f64 = double({}.f32);", f(insn.operands[0]), temp());
++        splatPs1(insn.operands[0]);
+         break;
+ 
+     case PPC_INST_LHA:
+@@ -1187,7 +1284,9 @@ bool Recompiler::Recompile(
          break;
  
      case PPC_INST_LWARX:
@@ -174,7 +275,7 @@ index fa91527..2018c64 100644
          if (insn.operands[1] != 0)
              print("{}.u32 + ", r(insn.operands[1]));
          println("{}.u32);", r(insn.operands[2]));
-@@ -1386,6 +1464,8 @@ bool Recompiler::Recompile(
+@@ -1386,6 +1485,8 @@ bool Recompiler::Recompile(
      {
          const uint64_t mask = ComputeMask(insn.operands[3] + 32, insn.operands[4] + 32);
          println("\t{}.u64 = (__builtin_rotateleft32({}.u32, {}) & 0x{:X}) | ({}.u64 & 0x{:X});", r(insn.operands[0]), r(insn.operands[1]), insn.operands[2], mask, r(insn.operands[0]), ~mask);
@@ -183,7 +284,7 @@ index fa91527..2018c64 100644
          break;
      }
  
-@@ -2263,6 +2343,427 @@ bool Recompiler::Recompile(
+@@ -2263,6 +2364,428 @@ bool Recompiler::Recompile(
          println("\t{}.u64 = {}.u64 ^ {};", r(insn.operands[0]), r(insn.operands[1]), insn.operands[2] << 16);
          break;
  
@@ -502,6 +603,7 @@ index fa91527..2018c64 100644
 +            printSetFlushMode(false);
 +            println("\t{}.u32 = PPC_LOAD_U32({});", temp(), ea());
 +            println("\t{}.f64 = double({}.f32);", f(d), temp());
++            splatPs1(d);
 +            break;
 +        case PPC_INST_LFDU:
 +            printSetFlushMode(false);

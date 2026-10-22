@@ -17,8 +17,7 @@ git -C tools/decaf-emu apply ../../patches/decaf-emu.patch
 ```
 
 Contenu des correctifs :
-- **decaf-emu** : `GX2InitFetchShaderEx` masque `location` sur 7 bits (attribut absent = −1) ;
-  option d'affichage `display.rotate180` (contournement temporaire, voir `recomp/README.md`).
+- **decaf-emu** : `GX2InitFetchShaderEx` masque `location` sur 7 bits (attribut absent = −1).
 - **XenonRecomp** : instructions PPC32/Gekko (paired-singles, lmw/stmw, etc.), tables de saut GHS,
-  imports Cafe OS, `lwarx` volatile - détail dans `recomp/README.md`.
+  imports Cafe OS, `lwarx` volatile, ps1 écrit par les opérations scalaires simple précision - détail dans `recomp/README.md`.
 - **wiiurpxtool** : `<io.h>` remplacé par `<cstdio>` (compilation hors MSVC).
