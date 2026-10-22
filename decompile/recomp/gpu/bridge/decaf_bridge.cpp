@@ -226,7 +226,11 @@ void probeUniforms(const char* stage, PPCContext& ctx)
 {
     static std::atomic<uint32_t> calls { 0 };
     const uint32_t n = calls++;
-    if (n < 3000 || n >= 4500 || !ctx.r5.u32)
+    // uTextureMode (PS, offset 0) : journalisé hors fenêtre, une fois par couple (valeur, lr).
+    static std::set<uint64_t> modes;
+    const bool mode = stage[0] == 'P' && ctx.r3.u32 == 0 && ctx.r5.u32
+        && modes.insert(uint64_t(rt::load32(ctx.r5.u32)) << 32 | uint32_t(ctx.lr)).second;
+    if (!mode && (n < 3000 || n >= 4500 || !ctx.r5.u32))
         return;
     float v[4];
     for (int i = 0; i < 4; i++)
@@ -234,8 +238,8 @@ void probeUniforms(const char* stage, PPCContext& ctx)
         const uint32_t bits = rt::load32(ctx.r5.u32 + i * 4);
         memcpy(&v[i], &bits, 4);
     }
-    RT_INFO("SONDE prog=%u %s offset=%d count=%u : %g %g %g %g", s_probeProgram.load(), stage, int32_t(ctx.r3.u32),
-        ctx.r4.u32, v[0], v[1], v[2], v[3]);
+    RT_INFO("SONDE prog=%u %s offset=%d count=%u lr=0x%08X : %g %g %g %g", s_probeProgram.load(), stage, int32_t(ctx.r3.u32),
+        ctx.r4.u32, uint32_t(ctx.lr), v[0], v[1], v[2], v[3]);
 }
 
 bool guardSetUniformReg(PPCContext& ctx)

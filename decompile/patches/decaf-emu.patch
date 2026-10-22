@@ -14,6 +14,149 @@ index 8e998c9..c97c57e 100644
  
           vfetch.word1 = vfetch.word1
              .DST_SEL_W(static_cast<latte::SQ_SEL>(attrib.mask & 0x7))
+diff --git a/src/libgpu/src/spirv/spirv_cf.cpp b/src/libgpu/src/spirv/spirv_cf.cpp
+index 430bab1..a049f30 100644
+--- a/src/libgpu/src/spirv/spirv_cf.cpp
++++ b/src/libgpu/src/spirv/spirv_cf.cpp
+@@ -159,6 +159,8 @@ void Transpiler::translateCf_LOOP_START_DX10(const ControlFlowInst &cf)
+    loop.body = &mSpv->makeNewBlock();
+    loop.merge = &mSpv->makeNewBlock();
+    loop.continue_target = &mSpv->makeNewBlock();
++   loop.breakVar = mSpv->createVariable(spv::NoPrecision, spv::StorageClassPrivate, mSpv->boolType(), "loopBreak");
++   mSpv->createStore(mSpv->makeBoolConstant(false), loop.breakVar);
+    mLoopStack.emplace_back(loop);
+ 
+    mSpv->createBranch(loop.head);
+@@ -204,10 +206,13 @@ void Transpiler::translateCf_LOOP_END(const ControlFlowInst &cf)
+    mSpv->createBranch(loop.continue_target);
+    mSpv->setBuildPoint(loop.continue_target);
+ 
+-   // Continue while state != InactiveBreak
++   // Continue while state != InactiveBreak and no LOOP_BREAK was taken
+    auto predContinue = mSpv->createBinOp(spv::OpINotEqual, mSpv->boolType(),
+                                          mSpv->createLoad(mSpv->stateVar(), spv::NoPrecision),
+                                          mSpv->stateInactiveBreak());
++   auto notBroken = mSpv->createUnaryOp(spv::OpLogicalNot, mSpv->boolType(),
++                                        mSpv->createLoad(loop.breakVar, spv::NoPrecision));
++   predContinue = mSpv->createBinOp(spv::OpLogicalAnd, mSpv->boolType(), predContinue, notBroken);
+    mSpv->createConditionalBranch(predContinue, loop.head, loop.merge);
+ 
+    mSpv->setBuildPoint(loop.merge);
+@@ -224,7 +229,29 @@ void Transpiler::translateCf_LOOP_CONTINUE(const ControlFlowInst &cf)
+ 
+ void Transpiler::translateCf_LOOP_BREAK(const ControlFlowInst &cf)
+ {
+-   latte::ShaderParser::translateCf_LOOP_BREAK(cf);
++   decaf_check(cf.word1.COND() == latte::SQ_CF_COND::ACTIVE);
++   decaf_check(!mLoopStack.empty());
++   auto &loop = mLoopStack.back();
++
++   // Active pixels leave the loop
++   {
++      auto isActive = mSpv->createBinOp(spv::OpIEqual, mSpv->boolType(),
++                                        mSpv->createLoad(mSpv->stateVar(), spv::NoPrecision),
++                                        mSpv->stateActive());
++      auto ifBuilder = spv::Builder::If { isActive, spv::SelectionControlMaskNone, *mSpv };
++      mSpv->createStore(mSpv->makeBoolConstant(true), loop.breakVar);
++      mSpv->createStore(mSpv->stateInactiveBreak(), mSpv->stateVar());
++      ifBuilder.makeEndIf();
++   }
++
++   if (cf.word1.POP_COUNT()) {
++      // Popping restores the pushed state, the break must stay in effect
++      mSpv->popStack(cf.word1.POP_COUNT());
++      auto ifBuilder = spv::Builder::If { mSpv->createLoad(loop.breakVar, spv::NoPrecision),
++                                          spv::SelectionControlMaskNone, *mSpv };
++      mSpv->createStore(mSpv->stateInactiveBreak(), mSpv->stateVar());
++      ifBuilder.makeEndIf();
++   }
+ }
+ 
+ void Transpiler::translateCf_EMIT_VERTEX(const ControlFlowInst &cf)
+diff --git a/src/libgpu/src/spirv/spirv_tex.cpp b/src/libgpu/src/spirv/spirv_tex.cpp
+index 016af0f..038cd62 100644
+--- a/src/libgpu/src/spirv/spirv_tex.cpp
++++ b/src/libgpu/src/spirv/spirv_tex.cpp
+@@ -427,6 +427,59 @@ void Transpiler::translateTex_GET_TEXTURE_INFO(const ControlFlowInst &cf, const
+    mSpv->writeGprMaskRef(destGpr, output);
+ }
+ 
++void Transpiler::translateTex_GET_COMP_TEX_LOD(const ControlFlowInst &cf, const TextureFetchInst &inst)
++{
++   // Computed LOD for a sample at these coordinates, written to every selected channel.
++   auto textureId = inst.word0.RESOURCE_ID();
++   auto samplerId = inst.word2.SAMPLER_ID();
++   auto texDim = mTexDims[textureId];
++   auto texFormat = mTexFormats[textureId];
++
++   GprMaskRef srcGpr;
++   srcGpr.gpr = makeGprRef(inst.word0.SRC_GPR(), inst.word0.SRC_REL(), SQ_INDEX_MODE::LOOP);
++   srcGpr.mask[SQ_CHAN::X] = inst.word2.SRC_SEL_X();
++   srcGpr.mask[SQ_CHAN::Y] = inst.word2.SRC_SEL_Y();
++   srcGpr.mask[SQ_CHAN::Z] = inst.word2.SRC_SEL_Z();
++   srcGpr.mask[SQ_CHAN::W] = inst.word2.SRC_SEL_W();
++
++   GprMaskRef destGpr;
++   destGpr.gpr = makeGprRef(inst.word1.DST_GPR(), inst.word1.DST_REL(), SQ_INDEX_MODE::LOOP);
++   destGpr.mask[SQ_CHAN::X] = inst.word1.DST_SEL_X();
++   destGpr.mask[SQ_CHAN::Y] = inst.word1.DST_SEL_Y();
++   destGpr.mask[SQ_CHAN::Z] = inst.word1.DST_SEL_Z();
++   destGpr.mask[SQ_CHAN::W] = inst.word1.DST_SEL_W();
++
++   auto lod = mSpv->makeFloatConstant(0.0f);
++   if (mType == ShaderParser::Type::Pixel) {
++      mSpv->addCapability(spv::CapabilityImageQuery);
++      auto texVarType = mSpv->textureVarType(textureId, texDim, texFormat);
++      auto texVal = mSpv->createLoad(mSpv->textureVar(textureId, texDim, texFormat), spv::NoPrecision);
++      auto sampVal = mSpv->createLoad(mSpv->samplerVar(samplerId), spv::NoPrecision);
++      auto sampledVal = mSpv->createOp(spv::OpSampledImage, mSpv->makeSampledImageType(texVarType), { texVal, sampVal });
++
++      auto srcGprVal = mSpv->readGprMaskRef(srcGpr);
++      spv::Id coords;
++      switch (texDim) {
++      case latte::SQ_TEX_DIM::DIM_1D:
++      case latte::SQ_TEX_DIM::DIM_1D_ARRAY:
++         coords = mSpv->createOp(spv::OpCompositeExtract, mSpv->floatType(), { srcGprVal, 0 });
++         break;
++      case latte::SQ_TEX_DIM::DIM_3D:
++      case latte::SQ_TEX_DIM::DIM_CUBEMAP:
++         coords = mSpv->createOp(spv::OpVectorShuffle, mSpv->float3Type(), { srcGprVal, srcGprVal, 0, 1, 2 });
++         break;
++      default:
++         coords = mSpv->createOp(spv::OpVectorShuffle, mSpv->float2Type(), { srcGprVal, srcGprVal, 0, 1 });
++      }
++
++      auto lods = mSpv->createBinOp(spv::OpImageQueryLod, mSpv->float2Type(), sampledVal, coords);
++      lod = mSpv->createOp(spv::OpCompositeExtract, mSpv->floatType(), { lods, 1 });
++   }
++
++   auto output = mSpv->createOp(spv::OpCompositeConstruct, mSpv->float4Type(), { lod, lod, lod, lod });
++   mSpv->writeGprMaskRef(destGpr, output);
++}
++
+ void Transpiler::translateTex_SET_CUBEMAP_INDEX(const ControlFlowInst &cf, const TextureFetchInst &inst)
+ {
+    // TODO: It is possible that we are supposed to somehow force
+diff --git a/src/libgpu/src/spirv/spirv_transpiler.h b/src/libgpu/src/spirv/spirv_transpiler.h
+index 71cd2f9..26cc67d 100644
+--- a/src/libgpu/src/spirv/spirv_transpiler.h
++++ b/src/libgpu/src/spirv/spirv_transpiler.h
+@@ -43,6 +43,7 @@ public:
+    void translateTex_SAMPLE_C_G_LB(const ControlFlowInst &cf, const TextureFetchInst &inst) override;
+    void translateTex_SAMPLE_C_G_LZ(const ControlFlowInst &cf, const TextureFetchInst &inst) override;
+    void translateTex_GET_TEXTURE_INFO(const ControlFlowInst &cf, const TextureFetchInst &inst) override;
++   void translateTex_GET_COMP_TEX_LOD(const ControlFlowInst &cf, const TextureFetchInst &inst) override;
+    void translateTex_SET_CUBEMAP_INDEX(const ControlFlowInst &cf, const TextureFetchInst &inst) override;
+    void translateTex_GET_GRADIENTS_H(const ControlFlowInst &cf, const TextureFetchInst &inst) override;
+    void translateTex_GET_GRADIENTS_V(const ControlFlowInst &cf, const TextureFetchInst &inst) override;
+@@ -244,6 +245,7 @@ protected:
+       spv::Block *body;
+       spv::Block *continue_target;
+       spv::Block *merge;
++      spv::Id breakVar; // set by LOOP_BREAK, survives the stack pops that follow it
+    };
+    std::vector<LoopState> mLoopStack;
+ 
 diff --git a/tools/latte-assembler/src/gfd.cpp b/tools/latte-assembler/src/gfd.cpp
 index 27343e6..4133621 100644
 --- a/tools/latte-assembler/src/gfd.cpp

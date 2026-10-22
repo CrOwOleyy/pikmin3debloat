@@ -313,6 +313,22 @@ Latte (`shaders/lyt/`, voir son README) : les fenêtres, boutons et cadres de s�
 s'affichent. Rendu approché (un seul mode de mélange de textures). Deux bugs de
 l'assembleur de decaf corrigés au passage (métadonnées jamais lues, masque de sortie).
 
+## Après le dialogue SpotPass : première 3D (2026-10-22)
+
+Une fois la question SpotPass répondue (la réponse est enregistrée, elle ne revient plus), le
+jeu lance la cinématique `CMCmn/movie/openingMovie.mp4`. Le décodeur H.264 n'est pas émulé :
+`runtime/h264.cpp` refuse `H264DECMemoryRequirement`, le lecteur abandonne la vidéo et le jeu
+enchaîne sur la carte `mapC`. Deux instructions de shader manquaient au traducteur
+Latte → SPIR-V de decaf (dans `patches/decaf-emu.patch`) :
+- `GET_COMP_TEX_LOD` (niveau de détail calculé) → `OpImageQueryLod` ;
+- `LOOP_BREAK` (sortie de boucle) → variable de sortie par boucle, conservée après les dépilements.
+
+Le décor 3D s'affiche (`docs/premiere_3d.png`), puis la première bulle de l'histoire.
+Défauts visibles : moitié basse blanche, une ligne diagonale, bulle de dialogue retournée
+verticalement, une icône en pixels aléatoires.
+
+![Première 3D](docs/premiere_3d.png)
+
 ## Affichage TV seul et commandes (2026-10-22)
 
 - **Affichage** : `gpu_window.cpp` règle libgpu en `ViewMode::TV`, fond noir, ratio conservé (au
