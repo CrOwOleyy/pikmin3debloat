@@ -326,12 +326,13 @@ Latte → SPIR-V de decaf (dans `patches/decaf-emu.patch`) :
 Le décor 3D s'affiche (`docs/premiere_3d.png`), puis la première bulle de l'histoire
 (`docs/bulle_intro.png`). Défauts encore visibles : moitié basse blanche, une ligne diagonale.
 
-**Orientation verticale** : decaf retournait le viewport Vulkan (« flipped by default »), si bien
-que les images rendues hors écran (le jeu en fait beaucoup : chaînes de flou 640×360, 320×180…,
-la bulle en 700×250) étaient stockées à l'envers par rapport à la console et ressortaient
-retournées une fois relues comme textures. Le patch garde l'orientation de GPU7 (NDC +1 sur la
-ligne 0) et c'est l'affichage final (`vulkan_display.cpp`) qui retourne l'image. La sonde
-`--probe` journalise maintenant chaque `GX2SetViewport` distinct.
+**Orientation verticale** : decaf retourne le viewport Vulkan (« flipped by default ») ; c'est la
+bonne convention pour ce jeu (la police du jeu place le haut des glyphes vers y = -1). Un essai
+de garder l'autre convention (viewport non retourné, image retournée à l'affichage, sens des
+faces inversé) reste disponible avec `DECAF_GPU7_ORIENTATION=1` mais met le texte à l'envers.
+La bulle de l'intro retournée venait en fait des autres bugs (culling, copies), corrigés depuis.
+Reste un « fantôme » miroir sous certains titres (effet de lueur composé depuis une image
+intermédiaire). La sonde `--probe` journalise chaque `GX2SetViewport` distinct.
 
 ![Bulle de l'intro](docs/bulle_intro.png)
 
@@ -366,10 +367,10 @@ image complète. `--rdoc-capture <s>` capture l'image suivante après `<s>` seco
 `ENABLE_VULKAN_RENDERDOC_CAPTURE=1 VK_LAYER_PATH=<dossier RenderDoc>
 VK_INSTANCE_LAYERS=VK_LAYER_RENDERDOC_Capture`) ; `DECAF_RDOC_ON_CUBE=1` capture 1,5 s dès que le
 jeu dessine dans une cube map. Trois bugs de decaf trouvés (`patches/decaf-emu.patch`) :
-- **Culling inversé** : en gardant l'orientation GPU7 (viewport de hauteur négative), le sens
-  des triangles vu par Vulkan s'inverse ; decaf éliminait les faces avant. Les sondes de lumière
-  (cube maps 48×48, un triangle plein écran) n'étaient jamais calculées, d'où un éclairage nul.
-  `vulkan_pipelines.cpp` inverse `frontFace`.
+- **Culling** : avec le viewport non retourné (essai d'orientation, désormais optionnel), le sens
+  des triangles vu par Vulkan s'inversait et decaf éliminait les faces avant ; les sondes de
+  lumière (cube maps 48×48, un triangle plein écran) n'étaient jamais calculées. Le sens des faces
+  suit maintenant l'orientation choisie (`vulkan_pipelines.cpp`).
 - **Copie d'image invalide** (`_copySurface`) : profondeur de copie = nombre de couches pour des
   tableaux 2D (Vulkan exige 1) ; la copie était ignorée.
 - **Rétroaction** : un passage plein écran lit l'image qu'il écrit (accepté par GPU7, indéfini
@@ -377,6 +378,8 @@ jeu dessine dans une cube map. Trois bugs de decaf trouvés (`patches/decaf-emu.
   avant le dessin et fait lire la copie.
 
 ![Rive enneigée](docs/neige_riviere.png)
+
+![Pikmin jaunes](docs/pikmin_jaunes.png)
 
 ### Shaders du décor (en cours)
 

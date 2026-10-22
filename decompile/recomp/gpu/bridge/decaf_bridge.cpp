@@ -407,6 +407,16 @@ bool guardSetColorBufferProbe(PPCContext& ctx)
 {
     // DECAF_RDOC_ON_CUBE : capture RenderDoc au premier rendu dans une cube map (sondes de lumière).
     static const bool rdocOnCube = getenv("DECAF_RDOC_ON_CUBE") != nullptr;
+    // DECAF_RDOC_ON_SIZE=<l>x<h> : idem au premier rendu dans une cible de cette taille.
+    static const char* rdocOnSize = getenv("DECAF_RDOC_ON_SIZE");
+    if (rdocOnSize && ctx.r3.u32)
+    {
+        char size[32];
+        snprintf(size, sizeof(size), "%ux%u", rt::load32(ctx.r3.u32 + 4), rt::load32(ctx.r3.u32 + 8));
+        static std::atomic<bool> done { false };
+        if (strcmp(size, rdocOnSize) == 0 && !done.exchange(true))
+            rt::rdocCaptureSpan(300);
+    }
     if (rdocOnCube && ctx.r3.u32 && rt::load32(ctx.r3.u32) == 3)
     {
         static std::atomic<bool> done { false };

@@ -349,21 +349,31 @@ index 71cd2f9..45b64b9 100644
     std::vector<LoopState> mLoopStack;
  
 diff --git a/src/libgpu/src/vulkan/vulkan_display.cpp b/src/libgpu/src/vulkan/vulkan_display.cpp
-index e96b29e..9c3a3d6 100644
+index e96b29e..41fd55b 100644
 --- a/src/libgpu/src/vulkan/vulkan_display.cpp
 +++ b/src/libgpu/src/vulkan/vulkan_display.cpp
-@@ -915,13 +915,14 @@ createBuffers(VulkanDisplayPipeline &displayPipeline,
+@@ -1,5 +1,6 @@
+ #ifdef DECAF_VULKAN
+ #include "vulkan_driver.h"
++#include "vulkan_utils.h"
+ #include "vulkan_displayshaders.h"
+ 
+ #include "gpu_config.h"
+@@ -914,7 +915,7 @@ createBuffers(VulkanDisplayPipeline &displayPipeline,
+               vk::PhysicalDevice &physicalDevice,
                vk::Device &device)
  {
-    static constexpr std::array<float, 24> vertices = {
--      -1.0f,  1.0f,  0.0f,  1.0f,
--       1.0f,  1.0f,  1.0f,  1.0f,
--       1.0f, -1.0f,  1.0f,  0.0f,
--
--       1.0f, -1.0f,  1.0f,  0.0f,
--      -1.0f, -1.0f,  0.0f,  0.0f,
--      -1.0f,  1.0f,  0.0f,  1.0f,
-+      // Scan buffers are stored bottom-up (see vulkan_viewscissor.cpp)
+-   static constexpr std::array<float, 24> vertices = {
++   static constexpr std::array<float, 24> verticesUpright = {
+       -1.0f,  1.0f,  0.0f,  1.0f,
+        1.0f,  1.0f,  1.0f,  1.0f,
+        1.0f, -1.0f,  1.0f,  0.0f,
+@@ -923,6 +924,17 @@ createBuffers(VulkanDisplayPipeline &displayPipeline,
+       -1.0f, -1.0f,  0.0f,  0.0f,
+       -1.0f,  1.0f,  0.0f,  1.0f,
+    };
++   // With gpu7Orientation() scan buffers are stored bottom-up (see vulkan_viewscissor.cpp)
++   static constexpr std::array<float, 24> verticesFlipped = {
 +      -1.0f,  1.0f,  0.0f,  0.0f,
 +       1.0f,  1.0f,  1.0f,  0.0f,
 +       1.0f, -1.0f,  1.0f,  1.0f,
@@ -371,9 +381,11 @@ index e96b29e..9c3a3d6 100644
 +       1.0f, -1.0f,  1.0f,  1.0f,
 +      -1.0f, -1.0f,  0.0f,  1.0f,
 +      -1.0f,  1.0f,  0.0f,  0.0f,
-    };
++   };
++   const auto &vertices = gpu7Orientation() ? verticesFlipped : verticesUpright;
  
     // Allocate buffer
+    auto bufferDesc = vk::BufferCreateInfo { };
 diff --git a/src/libgpu/src/vulkan/vulkan_draw.cpp b/src/libgpu/src/vulkan/vulkan_draw.cpp
 index a800272..92eb89f 100644
 --- a/src/libgpu/src/vulkan/vulkan_draw.cpp
@@ -539,21 +551,23 @@ index 49b0258..6796f95 100644
        auto dataState = cpu::getMemoryState(segment->address, segment->size);
  
 diff --git a/src/libgpu/src/vulkan/vulkan_pipelines.cpp b/src/libgpu/src/vulkan/vulkan_pipelines.cpp
-index 7d76227..98187a9 100644
+index 7d76227..9bb49c6 100644
 --- a/src/libgpu/src/vulkan/vulkan_pipelines.cpp
 +++ b/src/libgpu/src/vulkan/vulkan_pipelines.cpp
-@@ -693,10 +693,12 @@ Driver::checkCurrentPipeline()
+@@ -693,10 +693,14 @@ Driver::checkCurrentPipeline()
        rasterizer.cullMode = vk::CullModeFlagBits::eNone;
     }
  
-+   // The viewport keeps GPU7's orientation (see vulkan_viewscissor.cpp), which
-+   // reverses the winding Vulkan sees compared to decaf's flipped viewport.
++   // Keeping GPU7's orientation (see vulkan_viewscissor.cpp) reverses the winding
++   // Vulkan sees compared to decaf's flipped viewport.
++   auto cw = gpu7Orientation() ? vk::FrontFace::eCounterClockwise : vk::FrontFace::eClockwise;
++   auto ccw = gpu7Orientation() ? vk::FrontFace::eClockwise : vk::FrontFace::eCounterClockwise;
     if (currentDesc->paFace == latte::PA_FACE::CW) {
 -      rasterizer.frontFace = vk::FrontFace::eClockwise;
--   } else if (currentDesc->paFace == latte::PA_FACE::CCW) {
-       rasterizer.frontFace = vk::FrontFace::eCounterClockwise;
-+   } else if (currentDesc->paFace == latte::PA_FACE::CCW) {
-+      rasterizer.frontFace = vk::FrontFace::eClockwise;
++      rasterizer.frontFace = cw;
+    } else if (currentDesc->paFace == latte::PA_FACE::CCW) {
+-      rasterizer.frontFace = vk::FrontFace::eCounterClockwise;
++      rasterizer.frontFace = ccw;
     } else {
        decaf_abort("Unexpected pipeline cull mode");
     }
@@ -826,14 +840,28 @@ index 49414c3..b8ca605 100644
        return vk::Format::eB10G11R11UfloatPack32; // This is the incorrect format...
        //return vk::Format::eB10G11R11UfloatPack32; // Remapped?
 diff --git a/src/libgpu/src/vulkan/vulkan_utils.h b/src/libgpu/src/vulkan/vulkan_utils.h
-index db7672d..c25159c 100644
+index db7672d..d5eb0b4 100644
 --- a/src/libgpu/src/vulkan/vulkan_utils.h
 +++ b/src/libgpu/src/vulkan/vulkan_utils.h
-@@ -26,6 +26,8 @@ enum SurfaceFormatUsage : uint32_t
+@@ -1,4 +1,5 @@
+ #pragma once
++#include <cstdlib>
+ #ifdef DECAF_VULKAN
+ #include "latte/latte_formats.h"
+ 
+@@ -26,6 +27,16 @@ enum SurfaceFormatUsage : uint32_t
  vk::Format
  getVkSurfaceFormat(latte::SurfaceFormat format, latte::SQ_TILE_TYPE tileType);
  
 +extern bool gD24S8Fallback;
++
++// DECAF_GPU7_ORIENTATION=1: keep NDC +1 on row 0 (viewport not flipped), flip at display.
++inline bool
++gpu7Orientation()
++{
++   static const bool enabled = getenv("DECAF_GPU7_ORIENTATION") != nullptr;
++   return enabled;
++}
 +
  vk::ComponentSwizzle
  getVkComponentSwizzle(latte::SQ_SEL sel);
@@ -856,19 +884,28 @@ index 612ef10..a57f520 100644
     auto checkFormat = [&](latte::SurfaceFormat format, latte::SQ_TILE_TYPE tileType)
     {
 diff --git a/src/libgpu/src/vulkan/vulkan_viewscissor.cpp b/src/libgpu/src/vulkan/vulkan_viewscissor.cpp
-index 5789428..be3331a 100644
+index 5789428..341c1af 100644
 --- a/src/libgpu/src/vulkan/vulkan_viewscissor.cpp
 +++ b/src/libgpu/src/vulkan/vulkan_viewscissor.cpp
-@@ -65,9 +65,9 @@ Driver::checkCurrentViewportAndScissor()
+@@ -1,5 +1,6 @@
+ #ifdef DECAF_VULKAN
+ #include "vulkan_driver.h"
++#include "vulkan_utils.h"
+ 
+ namespace vulkan
+ {
+@@ -65,9 +66,11 @@ Driver::checkCurrentViewportAndScissor()
     viewport.width = vportSX * 2;
     viewport.height = vportSY * 2;
  
 -   // the view port is 'flipped by default'
 -   viewport.y = viewport.height + viewport.y;
 -   viewport.height = -viewport.height;
-+   // Keep GPU7's orientation (NDC +1 on row 0) so that render targets have the same
-+   // memory layout as on hardware and read back the right way up when sampled as
-+   // textures; the display flips the scan buffers instead.
++   // the view port is 'flipped by default' (unless gpu7Orientation(), see vulkan_utils.h)
++   if (!gpu7Orientation()) {
++      viewport.y = viewport.height + viewport.y;
++      viewport.height = -viewport.height;
++   }
  
     // TODO: Investigate whether we should be using ZOFFSET/ZSCALE to calculate these?
     viewport.minDepth = pa_sc_vport_zmin.VPORT_ZMIN();
