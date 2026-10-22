@@ -25,9 +25,15 @@ Ce qu'on sait (établi avec `--probe` et `--debug-colors`) :
 - programmes vus à l'écran : 3 = morceaux de cadre (`lyt_frame.vsh`), 12 = fond plein écran,
   14/15 = contenu de fenêtre et boutons. Les autres reçoivent le shader générique.
 
-Limites : un seul shader de pixels (couleur × texture 0) ; `uTextureMode`, les textures 1–2,
-les matrices indirectes et l'interpolation (`uInterpolateWidth/Offset`) sont ignorés. Le rendu
-est donc approché (teintes, mélanges de textures).
+Shader de pixels : couleur = couleur du sommet × (`uInterpolateOffset` + texture 0 ×
+`uInterpolateWidth`) - l'interpolation noir/blanc des matériaux (Offset = « noir »,
+Width = « blanc » − « noir ») ; c'est elle qui donne leur teinte aux fenêtres et au curseur cyan.
+Les cadres bornent la coordonnée à 0,99 : au-delà de la texture du coin, le bord est étiré.
+
+Limites : `uTextureMode` (entier, un octet par étage de texture semble-t-il : valeurs vues
+0x8E82, 0x8E02, 0x8E, 0x8E83, 0x2, 0xE), les textures 1–2 et les matrices indirectes sont
+ignorés ; un petit carré gris parasite reste près des boutons. `--psh=<fichier>` permet de
+remplacer le shader de pixels de tous les programmes par un shader de diagnostic.
 
 `make_lyt_gsh.py --debug-colors` remplace chaque shader de pixels par une couleur unique
 (R = bits 0–1 du numéro, V = bits 2–3, B = bit 4) pour voir quel programme dessine quoi.

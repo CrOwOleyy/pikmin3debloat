@@ -64,8 +64,10 @@ def main():
     assembler, out = str(Path(sys.argv[1]).resolve()), Path(sys.argv[2])
     debug = "--debug-colors" in sys.argv  # chaque programme peint une couleur unique
     with tempfile.TemporaryDirectory() as tmp:
-        header, program, end = assemble(assembler, tmp, HERE / "lyt.psh")
-        frame = assemble(assembler, tmp, HERE / "lyt.psh", HERE / "lyt_frame.vsh")[1]
+        # --psh=<fichier> : shader de pixels de diagnostic pour tous les programmes.
+        psh = next((Path(a[6:]) for a in sys.argv if a.startswith("--psh=")), HERE / "lyt.psh")
+        header, program, end = assemble(assembler, tmp, psh)
+        frame = assemble(assembler, tmp, psh, HERE / "lyt_frame.vsh")[1]
         programs = [frame if i in FRAME_PROGRAMS else program for i in range(PROGRAM_COUNT)]
         if debug:
             programs = []

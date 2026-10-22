@@ -1,4 +1,6 @@
-; Shader de pixels de remplacement pour nw::lyt : couleur du sommet x texture 0.
+; Shader de pixels de remplacement pour nw::lyt :
+;   couleur = couleur du sommet x (uInterpolateOffset + texture0 x uInterpolateWidth)
+; (interpolation noir/blanc des matériaux : Offset = « noir », Width = « blanc » - « noir »).
 ; Entrées : R0 = couleur (PARAM0), R1 = uv0 (PARAM1).
 ;
 ; $MODE = "UniformRegister"
@@ -32,8 +34,12 @@
 
 00 TEX: ADDR(48) CNT(1)
    0  SAMPLE          R2, R1.xy0x, t0, s0
-01 ALU: ADDR(32) CNT(4)
-   1  x: MUL             R0.x, R0.x, R2.x
+01 ALU: ADDR(32) CNT(8)
+   1  x: MULADD          R2.x, R2.x, C1.x, C2.x
+      y: MULADD          R2.y, R2.y, C1.y, C2.y
+      z: MULADD          R2.z, R2.z, C1.z, C2.z
+      w: MULADD          R2.w, R2.w, C1.w, C2.w
+   2  x: MUL             R0.x, R0.x, R2.x
       y: MUL             R0.y, R0.y, R2.y
       z: MUL             R0.z, R0.z, R2.z
       w: MUL             R0.w, R0.w, R2.w

@@ -1,6 +1,7 @@
 ; Variante « cadre de fenêtre » (programme 3) du shader de sommets nw::lyt :
 ; uv0 = (i ou 1-i) * taille du morceau (uTransform.xy) * uRcpTexSize0, miroirs selon
-; uFrameSpec (bit 17 = horizontal, bit 18 = vertical). Le reste est identique à lyt.vsh.
+; uFrameSpec (bit 17 = horizontal, bit 18 = vertical), borné à 0,99 : au-delà de la texture du
+; coin, le bord est étiré (morceaux plus longs que la texture). Le reste est identique à lyt.vsh.
 ;
 ; Shader de sommets de remplacement pour nw::lyt (lyt_BuildinShader.gsh, abîmé dans le dump).
 ; Écrit à la main d'après les noms et les valeurs que le jeu envoie (voir README.md du dossier).
@@ -79,7 +80,7 @@
 ; $VGT_HOS_REUSE_DEPTH.REUSE_DEPTH = 16
 
 00 CALL_FS NO_BARRIER
-01 ALU: ADDR(32) CNT(78)
+01 ALU: ADDR(32) CNT(81)
    0  x: MULADD          R2.x, R1.x, C7.x, C7.z
       y: MULADD          R2.y, -R1.y, C7.y, C7.w
       z: MOV             R2.z, 0.0f
@@ -149,8 +150,10 @@
       y: CNDE_INT        R8.y, R7.y, R1.y, R7.w
   18  x: MUL             R8.x, R8.x, C7.x
       y: MUL             R8.y, R8.y, C7.y
-  19  x: MUL             R9.x, R8.x, C35.x
-      y: MUL             R9.y, R8.y, C35.y
+  19  x: MUL             R8.x, R8.x, C35.x
+      y: MUL             R8.y, R8.y, C35.y
+  20  x: MIN             R9.x, R8.x, (0x3F7D70A4, 0.99)
+      y: MIN             R9.y, R8.y, (0x3F7D70A4, 0.99)
       z: MOV             R9.z, 0.0f
       w: MOV             R9.w, 1.0f
 02 EXP_DONE: POS0, R4.xyzw
