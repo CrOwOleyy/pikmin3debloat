@@ -157,6 +157,49 @@ index 71cd2f9..26cc67d 100644
     };
     std::vector<LoopState> mLoopStack;
  
+diff --git a/src/libgpu/src/vulkan/vulkan_display.cpp b/src/libgpu/src/vulkan/vulkan_display.cpp
+index e96b29e..9c3a3d6 100644
+--- a/src/libgpu/src/vulkan/vulkan_display.cpp
++++ b/src/libgpu/src/vulkan/vulkan_display.cpp
+@@ -915,13 +915,14 @@ createBuffers(VulkanDisplayPipeline &displayPipeline,
+               vk::Device &device)
+ {
+    static constexpr std::array<float, 24> vertices = {
+-      -1.0f,  1.0f,  0.0f,  1.0f,
+-       1.0f,  1.0f,  1.0f,  1.0f,
+-       1.0f, -1.0f,  1.0f,  0.0f,
+-
+-       1.0f, -1.0f,  1.0f,  0.0f,
+-      -1.0f, -1.0f,  0.0f,  0.0f,
+-      -1.0f,  1.0f,  0.0f,  1.0f,
++      // Scan buffers are stored bottom-up (see vulkan_viewscissor.cpp)
++      -1.0f,  1.0f,  0.0f,  0.0f,
++       1.0f,  1.0f,  1.0f,  0.0f,
++       1.0f, -1.0f,  1.0f,  1.0f,
++
++       1.0f, -1.0f,  1.0f,  1.0f,
++      -1.0f, -1.0f,  0.0f,  1.0f,
++      -1.0f,  1.0f,  0.0f,  0.0f,
+    };
+ 
+    // Allocate buffer
+diff --git a/src/libgpu/src/vulkan/vulkan_viewscissor.cpp b/src/libgpu/src/vulkan/vulkan_viewscissor.cpp
+index 5789428..be3331a 100644
+--- a/src/libgpu/src/vulkan/vulkan_viewscissor.cpp
++++ b/src/libgpu/src/vulkan/vulkan_viewscissor.cpp
+@@ -65,9 +65,9 @@ Driver::checkCurrentViewportAndScissor()
+    viewport.width = vportSX * 2;
+    viewport.height = vportSY * 2;
+ 
+-   // the view port is 'flipped by default'
+-   viewport.y = viewport.height + viewport.y;
+-   viewport.height = -viewport.height;
++   // Keep GPU7's orientation (NDC +1 on row 0) so that render targets have the same
++   // memory layout as on hardware and read back the right way up when sampled as
++   // textures; the display flips the scan buffers instead.
+ 
+    // TODO: Investigate whether we should be using ZOFFSET/ZSCALE to calculate these?
+    viewport.minDepth = pa_sc_vport_zmin.VPORT_ZMIN();
 diff --git a/tools/latte-assembler/src/gfd.cpp b/tools/latte-assembler/src/gfd.cpp
 index 27343e6..4133621 100644
 --- a/tools/latte-assembler/src/gfd.cpp

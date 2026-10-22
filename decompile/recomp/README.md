@@ -323,9 +323,17 @@ Latte → SPIR-V de decaf (dans `patches/decaf-emu.patch`) :
 - `GET_COMP_TEX_LOD` (niveau de détail calculé) → `OpImageQueryLod` ;
 - `LOOP_BREAK` (sortie de boucle) → variable de sortie par boucle, conservée après les dépilements.
 
-Le décor 3D s'affiche (`docs/premiere_3d.png`), puis la première bulle de l'histoire.
-Défauts visibles : moitié basse blanche, une ligne diagonale, bulle de dialogue retournée
-verticalement, une icône en pixels aléatoires.
+Le décor 3D s'affiche (`docs/premiere_3d.png`), puis la première bulle de l'histoire
+(`docs/bulle_intro.png`). Défauts encore visibles : moitié basse blanche, une ligne diagonale.
+
+**Orientation verticale** : decaf retournait le viewport Vulkan (« flipped by default »), si bien
+que les images rendues hors écran (le jeu en fait beaucoup : chaînes de flou 640×360, 320×180…,
+la bulle en 700×250) étaient stockées à l'envers par rapport à la console et ressortaient
+retournées une fois relues comme textures. Le patch garde l'orientation de GPU7 (NDC +1 sur la
+ligne 0) et c'est l'affichage final (`vulkan_display.cpp`) qui retourne l'image. La sonde
+`--probe` journalise maintenant chaque `GX2SetViewport` distinct.
+
+![Bulle de l'intro](docs/bulle_intro.png)
 
 ![Première 3D](docs/premiere_3d.png)
 

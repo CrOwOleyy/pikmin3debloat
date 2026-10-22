@@ -14,6 +14,7 @@
 #include <cafe/libraries/gx2/gx2.h>
 #include <cafe/libraries/gx2/gx2_shaders.h>
 #include <libgpu/latte/latte_disassembler.h>
+#include <mutex>
 #include <set>
 #include <libcpu/cpu_control.h>
 #include <libcpu/state.h>
@@ -230,6 +231,27 @@ void probeUniforms(const char* stage, PPCContext& ctx)
     static std::set<uint64_t> modes;
     const bool mode = stage[0] == 'P' && ctx.r3.u32 == 0 && ctx.r5.u32
         && modes.insert(uint64_t(rt::load32(ctx.r5.u32)) << 32 | uint32_t(ctx.lr)).second;
+    // uProjection des layouts (VS, offset 0, 16 valeurs, appelé depuis nw::lyt) : chaque matrice distincte.
+    static std::set<uint64_t> projections;
+    if (stage[0] == 'V' && (ctx.r3.u32 == 0 || ctx.r3.u32 == 16) && ctx.r5.u32 && (uint32_t(ctx.lr) >> 20) == 0x034
+        && projections.size() < 60)
+    {
+        uint64_t h = 0;
+        for (int i = 0; i < 16; i++)
+            h = h * 31 + rt::load32(ctx.r5.u32 + i * 4);
+        if (projections.insert(h).second)
+        {
+            float m[16] = {};
+            for (uint32_t i = 0; i < ctx.r4.u32 && i < 16; i++)
+            {
+                const uint32_t bits = rt::load32(ctx.r5.u32 + i * 4);
+                memcpy(&m[i], &bits, 4);
+            }
+            RT_INFO("SONDE matrice offset=%u lr=0x%08X : %g %g %g %g | %g %g %g %g | %g %g %g %g | %g %g %g %g",
+                ctx.r3.u32, uint32_t(ctx.lr), m[0], m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8], m[9], m[10], m[11], m[12],
+                m[13], m[14], m[15]);
+        }
+    }
     if (!mode && (n < 3000 || n >= 4500 || !ctx.r5.u32))
         return;
     float v[4];
@@ -278,7 +300,24 @@ bool guardSetShaders(PPCContext& ctx)
     return false;
 }
 
+// --probe : viewports distincts (x, y, largeur, hauteur) et appelant.
+bool guardSetViewport(PPCContext& ctx)
+{
+    static std::mutex lock;
+    static std::set<std::string> seen;
+    if (!rt::g_probe)
+        return false;
+    char text[160];
+    snprintf(text, sizeof(text), "%g %g %g %g lr=0x%08X", ctx.f1.f64, ctx.f2.f64, ctx.f3.f64, ctx.f4.f64,
+        uint32_t(ctx.lr));
+    std::lock_guard guard(lock);
+    if (seen.insert(text).second)
+        RT_INFO("SONDE GX2SetViewport %s", text);
+    return false;
+}
+
 const std::unordered_map<std::string, Guard> kGuards = {
+    { "GX2SetViewport", guardSetViewport },
     { "GX2SetShaders", guardSetShaders },
     { "GX2SetVertexUniformReg", guardSetVertexUniformReg },
     { "GX2SetPixelUniformReg", guardSetPixelUniformReg },
