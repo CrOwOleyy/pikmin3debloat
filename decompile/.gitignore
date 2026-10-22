@@ -15,3 +15,4 @@ recomp/build/
 recomp/gpu/build/
 capture/
 recomp/dump/
+recomp/rdoc/

@@ -97,6 +97,50 @@ void tclInit();
 void inputSetWindow(void* window);
 
 bool g_captureWindow = false;
+uint32_t g_rdocCaptureAt = 0; // --rdoc-capture <s>
+
+// --rdoc-capture <s> : lancé sous RenderDoc (couche Vulkan VK_LAYER_RENDERDOC_Capture), demande la
+// capture de l'image suivante après <s> secondes, dans rdoc/. Table RENDERDOC_API_1_6_0 :
+// SetCaptureFilePathTemplate = entrée 11, TriggerCapture = entrée 15 (renderdoc_app.h).
+static void **rdocApi()
+{
+   auto module = GetModuleHandleA("renderdoc.dll");
+   using GetApi = int (*)(int, void **);
+   auto getApi = module ? reinterpret_cast<GetApi>(GetProcAddress(module, "RENDERDOC_GetAPI")) : nullptr;
+   void **api = nullptr;
+   if (!getApi || !getApi(10600, reinterpret_cast<void **>(&api)) || !api) {
+      RT_WARN("RenderDoc absent : lancer avec VK_LAYER_PATH=<dossier RenderDoc> VK_INSTANCE_LAYERS=VK_LAYER_RENDERDOC_Capture");
+      return nullptr;
+   }
+   CreateDirectoryW(L"rdoc", nullptr);
+   reinterpret_cast<void (*)(const char *)>(api[11])("rdoc/pikmin3");
+   return api;
+}
+
+static void rdocCaptureLoop(uint32_t seconds)
+{
+   std::this_thread::sleep_for(std::chrono::seconds(seconds));
+   if (auto api = rdocApi()) {
+      reinterpret_cast<void (*)()>(api[15])(); // TriggerCapture
+      RT_INFO("RenderDoc : capture demandée");
+   }
+}
+
+// Capture RenderDoc de tout ce que le GPU exécute pendant <ms> millisecondes à partir de maintenant
+// (StartFrameCapture = entrée 19, EndFrameCapture = entrée 21), pour attraper un rendu ponctuel.
+void rdocCaptureSpan(uint32_t ms)
+{
+   std::thread([ms]() {
+      auto api = rdocApi();
+      if (!api)
+         return;
+      reinterpret_cast<void (*)(void *, void *)>(api[19])(nullptr, nullptr);
+      RT_INFO("RenderDoc : capture ponctuelle commencée");
+      std::this_thread::sleep_for(std::chrono::milliseconds(ms));
+      reinterpret_cast<uint32_t (*)(void *, void *)>(api[21])(nullptr, nullptr);
+      RT_INFO("RenderDoc : capture ponctuelle terminée");
+   }).detach();
+}
 bool g_splitView = false; // --split : écran TV + GamePad (disposition de decaf)
 
 void gpuStart()
@@ -154,6 +198,8 @@ void gpuStart()
    tclInit();
    if (g_captureWindow)
       std::thread(captureLoop).detach();
+   if (g_rdocCaptureAt)
+      std::thread(rdocCaptureLoop, g_rdocCaptureAt).detach();
    RT_INFO("rendu : pilote Vulkan (libgpu de decaf) démarré");
 }
 

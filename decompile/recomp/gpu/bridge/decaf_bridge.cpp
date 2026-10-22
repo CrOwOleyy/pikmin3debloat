@@ -14,6 +14,7 @@
 #include <cafe/libraries/gx2/gx2.h>
 #include <cafe/libraries/gx2/gx2_shaders.h>
 #include <libgpu/latte/latte_disassembler.h>
+#include <map>
 #include <mutex>
 #include <set>
 #include <libcpu/cpu_control.h>
@@ -23,6 +24,11 @@
 #include <vector>
 #include <cstring>
 #include <unordered_map>
+
+namespace rt
+{
+void rdocCaptureSpan(uint32_t ms);
+}
 
 namespace
 {
@@ -191,8 +197,21 @@ bool guardSetGeometryShader(PPCContext& ctx)
     return !ok;
 }
 
-bool guardDraw(PPCContext&)
+std::atomic<uint32_t> s_probeTarget { 0 }; // image de la cible de couleur 0 liée (--probe)
+
+bool guardDraw(PPCContext& ctx)
 {
+    if (rt::g_probe)
+    {
+        static std::mutex lock;
+        static std::map<uint32_t, uint32_t> counts;
+        static uint32_t total = 0;
+        std::lock_guard guard(lock);
+        counts[s_probeTarget.load()]++;
+        if (++total % 200000 == 0)
+            for (auto& [image, n] : counts)
+                RT_INFO("SONDE draws cible 0x%08X : %u", image, n);
+    }
     if (!s_vertexShaderMissing && !s_pixelShaderMissing)
         return false;
     const uint32_t n = ++s_skippedDraws;
@@ -382,7 +401,37 @@ bool guardSetVertexUniformBlockProbe(PPCContext& ctx)
     return false;
 }
 
+// --probe : cibles de couleur distinctes (GX2ColorBuffer : surface.dim +0, width +4, height +8,
+// depth +0xC, format +0x14, image +0x24, tileMode +0x30 ; viewMip +0x74, viewFirstSlice +0x78).
+bool guardSetColorBufferProbe(PPCContext& ctx)
+{
+    // DECAF_RDOC_ON_CUBE : capture RenderDoc au premier rendu dans une cube map (sondes de lumière).
+    static const bool rdocOnCube = getenv("DECAF_RDOC_ON_CUBE") != nullptr;
+    if (rdocOnCube && ctx.r3.u32 && rt::load32(ctx.r3.u32) == 3)
+    {
+        static std::atomic<bool> done { false };
+        if (!done.exchange(true))
+            rt::rdocCaptureSpan(1500);
+    }
+    if (!rt::g_probe || !ctx.r3.u32)
+        return false;
+    static std::mutex lock;
+    static std::set<std::string> seen;
+    const uint32_t b = ctx.r3.u32;
+    if (ctx.r4.u32 == 0)
+        s_probeTarget = rt::load32(b + 0x24) + rt::load32(b + 0x78);
+    char text[200];
+    snprintf(text, sizeof(text), "%ux%ux%u dim=%u fmt=0x%X tile=%u image=0x%08X slice=%u target=%u",
+        rt::load32(b + 4), rt::load32(b + 8), rt::load32(b + 0xC), rt::load32(b), rt::load32(b + 0x14),
+        rt::load32(b + 0x30), rt::load32(b + 0x24), rt::load32(b + 0x78), ctx.r4.u32);
+    std::lock_guard guard(lock);
+    if (seen.insert(text).second)
+        RT_INFO("SONDE cible %s (lr=0x%08X)", text, uint32_t(ctx.lr));
+    return false;
+}
+
 const std::unordered_map<std::string, Guard> kGuards = {
+    { "GX2SetColorBuffer", guardSetColorBufferProbe },
     { "GX2InitFetchShaderEx", guardInitFetchShader },
     { "GX2SetViewport", guardSetViewport },
     { "GX2SetShaders", guardSetShaders },

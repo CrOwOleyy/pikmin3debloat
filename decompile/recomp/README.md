@@ -359,6 +359,25 @@ ligne 0) et c'est l'affichage final (`vulkan_display.cpp`) qui retourne l'image.
 
 ![Intro, forêt enneigée](docs/intro_foret.png)
 
+### Analyse RenderDoc : sondes, culling, rétroaction (2026-10-22)
+
+RenderDoc 1.46 (portable, `decompile/tools/renderdoc_dl/`, non versionné) a permis de suivre une
+image complète. `--rdoc-capture <s>` capture l'image suivante après `<s>` secondes (lancer avec
+`ENABLE_VULKAN_RENDERDOC_CAPTURE=1 VK_LAYER_PATH=<dossier RenderDoc>
+VK_INSTANCE_LAYERS=VK_LAYER_RENDERDOC_Capture`) ; `DECAF_RDOC_ON_CUBE=1` capture 1,5 s dès que le
+jeu dessine dans une cube map. Trois bugs de decaf trouvés (`patches/decaf-emu.patch`) :
+- **Culling inversé** : en gardant l'orientation GPU7 (viewport de hauteur négative), le sens
+  des triangles vu par Vulkan s'inverse ; decaf éliminait les faces avant. Les sondes de lumière
+  (cube maps 48×48, un triangle plein écran) n'étaient jamais calculées, d'où un éclairage nul.
+  `vulkan_pipelines.cpp` inverse `frontFace`.
+- **Copie d'image invalide** (`_copySurface`) : profondeur de copie = nombre de couches pour des
+  tableaux 2D (Vulkan exige 1) ; la copie était ignorée.
+- **Rétroaction** : un passage plein écran lit l'image qu'il écrit (accepté par GPU7, indéfini
+  en Vulkan : blocs de pixels parasites sur cartes AMD). `resolveTextureFeedback` copie la cible
+  avant le dessin et fait lire la copie.
+
+![Rive enneigée](docs/neige_riviere.png)
+
 ### Shaders du décor (en cours)
 
 Arbres blancs et unis, sol noir. Diagnostic (outils ci-dessous) : les textures sont bonnes

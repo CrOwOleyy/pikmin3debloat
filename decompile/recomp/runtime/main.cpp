@@ -27,6 +27,7 @@ extern bool g_captureWindow;
 extern bool g_splitView;
 extern bool g_probe;
 extern uint32_t g_autoA;
+extern uint32_t g_rdocCaptureAt;
 }
 
 namespace
@@ -185,6 +186,8 @@ int main(int argc, char** argv)
             g_splitView = true;
         else if (a == "--probe")
             g_probe = true;
+        else if (a == "--rdoc-capture" && i + 1 < argc)
+            g_rdocCaptureAt = uint32_t(atoi(argv[++i]));
         else if (a == "--auto-a" && i + 1 < argc)
             g_autoA = uint32_t(atoi(argv[++i]));
         else if (a == "--input-test")

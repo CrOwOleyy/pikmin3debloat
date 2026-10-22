@@ -374,6 +374,66 @@ index e96b29e..9c3a3d6 100644
     };
  
     // Allocate buffer
+diff --git a/src/libgpu/src/vulkan/vulkan_draw.cpp b/src/libgpu/src/vulkan/vulkan_draw.cpp
+index a800272..92eb89f 100644
+--- a/src/libgpu/src/vulkan/vulkan_draw.cpp
++++ b/src/libgpu/src/vulkan/vulkan_draw.cpp
+@@ -305,6 +305,22 @@ Driver::drawGenericIndexed(latte::VGT_DRAW_INITIATOR drawInit, uint32_t numIndic
+ 
+    mCurrentDraw = &drawDesc;
+ 
++   // DEBUG(pikmin3): DECAF_DEBUG_DRAWADDR=<hex> logs draws whose colour target 0 is at this address
++   static const char *debugDrawAddr = getenv("DECAF_DEBUG_DRAWADDR");
++   bool debugThisDraw = false;
++   if (debugDrawAddr) {
++      static int logged = 0;
++      auto cb0 = getRegister<latte::CB_COLORN_BASE>(latte::Register::CB_COLOR0_BASE);
++      auto mask = getRegister<uint32_t>(latte::Register::CB_TARGET_MASK);
++      auto shaderMask = getRegister<uint32_t>(latte::Register::CB_SHADER_MASK);
++      if (((cb0.BASE_256B() << 8) >> 12) == (std::strtoul(debugDrawAddr, nullptr, 16) >> 12) && logged < 40) {
++         ++logged;
++         debugThisDraw = true;
++         gLog->info("DRAW cb0={:08X} targetMask={:08X} shaderMask={:08X} prim={} n={}", cb0.BASE_256B() << 8, mask,
++                    shaderMask, static_cast<uint32_t>(drawDesc.primitiveType), numIndices);
++      }
++   }
++
+    // Set up all the required state, ordering here is very important
+    if (!checkCurrentVertexShader()) {
+       gLog->debug("Skipped draw due to a vertex shader error");
+@@ -363,6 +379,12 @@ Driver::drawGenericIndexed(latte::VGT_DRAW_INITIATOR drawInit, uint32_t numIndic
+       return;
+    }
+ 
++   if (debugThisDraw) {
++      gLog->info("DRAW passed checks, renderPass colour indexes {} {} depth {}",
++                 mCurrentDraw->renderPass->colorAttachmentIndexes[0], mCurrentDraw->renderPass->colorAttachmentIndexes[1],
++                 mCurrentDraw->renderPass->depthAttachmentIndex);
++   }
++
+    // These things need to happen up here before we enter the render pass, otherwise
+    // the pipeline barrier triggered by the memory cache transition will fail.
+    uint32_t opaqueStride = 0;
+@@ -402,6 +424,7 @@ Driver::drawGenericIndexed(latte::VGT_DRAW_INITIATOR drawInit, uint32_t numIndic
+    // this order, since this draw might use the last renderpasses framebuffer as a texture, and we
+    // need to barrier AFTER the previous draws are flushed.
+    mCurrentDraw = &drawDesc;
++   resolveTextureFeedback();
+    prepareCurrentTextures();
+    prepareCurrentFramebuffer();
+    mCurrentDraw = nullptr;
+diff --git a/src/libgpu/src/vulkan/vulkan_driver.h b/src/libgpu/src/vulkan/vulkan_driver.h
+index c87d31f..38ec142 100644
+--- a/src/libgpu/src/vulkan/vulkan_driver.h
++++ b/src/libgpu/src/vulkan/vulkan_driver.h
+@@ -565,6 +565,7 @@ protected:
+    void updateDrawTexture(ShaderStage shaderStage, uint32_t textureIdx);
+    bool checkCurrentTextures();
+    void prepareCurrentTextures();
++   void resolveTextureFeedback();
+ 
+    // CBuffers
+    void updateDrawUniformBuffer(ShaderStage shaderStage, uint32_t cbufferIdx);
 diff --git a/src/libgpu/src/vulkan/vulkan_memcache.cpp b/src/libgpu/src/vulkan/vulkan_memcache.cpp
 index 49ac6e6..7e8fa68 100644
 --- a/src/libgpu/src/vulkan/vulkan_memcache.cpp
@@ -397,10 +457,16 @@ index 49ac6e6..7e8fa68 100644
  
     if (delayedWriteFunc) {
 diff --git a/src/libgpu/src/vulkan/vulkan_memtracker.h b/src/libgpu/src/vulkan/vulkan_memtracker.h
-index 49b0258..14ba64e 100644
+index 49b0258..6796f95 100644
 --- a/src/libgpu/src/vulkan/vulkan_memtracker.h
 +++ b/src/libgpu/src/vulkan/vulkan_memtracker.h
-@@ -49,6 +49,10 @@ public:
+@@ -1,4 +1,5 @@
+ #pragma once
++#include <cstdlib>
+ #ifdef DECAF_VULKAN
+ 
+ #include <cstdint>
+@@ -49,6 +50,10 @@ public:
        // that we do not overwrite a pending GPU write with random CPU data.
        bool gpuWritten = false;
  
@@ -411,7 +477,7 @@ index 49b0258..14ba64e 100644
        // The last change for this segment
        uint64_t lastChangeIndex = 0;
  
-@@ -111,6 +115,7 @@ public:
+@@ -111,6 +116,7 @@ public:
     {
        segment->dataState = cpu::getMemoryState(segment->address, segment->size);
        segment->gpuWritten = false;
@@ -419,7 +485,7 @@ index 49b0258..14ba64e 100644
     }
  
     void refreshSegment(Segment *segment)
-@@ -210,6 +215,8 @@ protected:
+@@ -210,6 +216,8 @@ protected:
        // do any of the hashing work, it will be done during readback.
        if (oldSegment->gpuWritten) {
           newSegment->dataState = {};
@@ -428,7 +494,7 @@ index 49b0258..14ba64e 100644
           return newIter;
        }
  
-@@ -325,16 +332,35 @@ protected:
+@@ -325,16 +333,39 @@ protected:
     {
        // If this segment was last written by the GPU, then we are guarenteed
        // to already have the most up to date data in a GPU buffer somewhere.
@@ -448,6 +514,10 @@ index 49b0258..14ba64e 100644
 +      // wins.  Guest memory is not updated by GPU writes that are not read back, so
 +      // a change compared to the contents at the time of the GPU write can only
 +      // come from the CPU.
++      if (segment->gpuWritten && getenv("DECAF_NO_CPU_OVERWRITE_CHECK")) {
++         return;
++      }
++
 +      if (segment->gpuWritten) {
 +         auto dataState = cpu::getMemoryState(segment->address, segment->size);
 +         segment->lastCheckIndex = mCurrentBatchIndex;
@@ -468,6 +538,254 @@ index 49b0258..14ba64e 100644
        // Rehash all our data
        auto dataState = cpu::getMemoryState(segment->address, segment->size);
  
+diff --git a/src/libgpu/src/vulkan/vulkan_pipelines.cpp b/src/libgpu/src/vulkan/vulkan_pipelines.cpp
+index 7d76227..98187a9 100644
+--- a/src/libgpu/src/vulkan/vulkan_pipelines.cpp
++++ b/src/libgpu/src/vulkan/vulkan_pipelines.cpp
+@@ -693,10 +693,12 @@ Driver::checkCurrentPipeline()
+       rasterizer.cullMode = vk::CullModeFlagBits::eNone;
+    }
+ 
++   // The viewport keeps GPU7's orientation (see vulkan_viewscissor.cpp), which
++   // reverses the winding Vulkan sees compared to decaf's flipped viewport.
+    if (currentDesc->paFace == latte::PA_FACE::CW) {
+-      rasterizer.frontFace = vk::FrontFace::eClockwise;
+-   } else if (currentDesc->paFace == latte::PA_FACE::CCW) {
+       rasterizer.frontFace = vk::FrontFace::eCounterClockwise;
++   } else if (currentDesc->paFace == latte::PA_FACE::CCW) {
++      rasterizer.frontFace = vk::FrontFace::eClockwise;
+    } else {
+       decaf_abort("Unexpected pipeline cull mode");
+    }
+diff --git a/src/libgpu/src/vulkan/vulkan_surface.cpp b/src/libgpu/src/vulkan/vulkan_surface.cpp
+index c1da79e..bd57ef1 100644
+--- a/src/libgpu/src/vulkan/vulkan_surface.cpp
++++ b/src/libgpu/src/vulkan/vulkan_surface.cpp
+@@ -1,5 +1,7 @@
+ #ifdef DECAF_VULKAN
+ #include "vulkan_driver.h"
++#include <common/log.h>
++#include <cstdlib>
+ #include "vulkan_utils.h"
+ 
+ #include "latte/latte_formats.h"
+@@ -215,7 +217,10 @@ Driver::_copySurface(SurfaceObject *dst, SurfaceObject *src, SurfaceSubRange ran
+ 
+       // range.numSlices is expressed by the extent here...
+    }
+-   copyRegion.extent = vk::Extent3D { copyWidth, copyHeight, copySlices };
++   // Only 3D images take their slices in the extent, array layers are counted
++   // by the subresources (a 2D copy with a depth other than 1 is invalid).
++   auto is3d = src->desc.dim == latte::SQ_TEX_DIM::DIM_3D || dst->desc.dim == latte::SQ_TEX_DIM::DIM_3D;
++   copyRegion.extent = vk::Extent3D { copyWidth, copyHeight, is3d ? range.numSlices : 1u };
+ 
+    auto originalSrcUsage = src->activeUsage;
+ 
+@@ -772,9 +777,18 @@ Driver::_refreshSurface(SurfaceObject *surface, SurfaceSubRange range)
+       _copySurface(surface, object, { start, count });
+    });
+ 
++   static const char *debugSurf = getenv("DECAF_DEBUG_SURF");
++   auto debugThis = debugSurf && surface->desc.width == std::strtoul(debugSurf, nullptr, 10);
++
+    for (auto i = sectionRange.start; i < sectionRange.start + sectionRange.count; ++i) {
+       auto latestChangeIndex = memCache->sections[i].wantedChangeIndex;
+ 
++      if (debugThis) {
++         gLog->info("SURF refresh {} slice {} have {} want {} owner {}", _makeSurfaceDescStr(surface->desc), i,
++                    surface->slices[i].lastChangeIndex, latestChangeIndex,
++                    _getSurfaceGroupOwner(surface->group, i, latestChangeIndex) ? "yes" : "no");
++      }
++
+       if (surface->slices[i].lastChangeIndex >= latestChangeIndex) {
+          continue;
+       }
+@@ -814,6 +828,12 @@ Driver::_invalidateSurface(SurfaceObject *surface, SurfaceSubRange range)
+       _barrierSurface(surface, oldUsage, oldLayout, range);
+    });
+ 
++   static const char *debugSurf = getenv("DECAF_DEBUG_SURF");
++   if (debugSurf && surface->desc.width == std::strtoul(debugSurf, nullptr, 10)) {
++      gLog->info("SURF invalidate {} slices {}+{} mem {:X}+{:X}", _makeSurfaceDescStr(surface->desc), range.firstSlice,
++                 range.numSlices, memRange.first, memRange.second);
++   }
++
+    // Update our last change index to match the data we wrote
+    auto sectionRange = _sliceRangeToSectionRange(range);
+    for (auto i = sectionRange.start; i < sectionRange.start + sectionRange.count; ++i) {
+diff --git a/src/libgpu/src/vulkan/vulkan_textures.cpp b/src/libgpu/src/vulkan/vulkan_textures.cpp
+index f8f0a16..60ea87d 100644
+--- a/src/libgpu/src/vulkan/vulkan_textures.cpp
++++ b/src/libgpu/src/vulkan/vulkan_textures.cpp
+@@ -1,5 +1,7 @@
+ #ifdef DECAF_VULKAN
+ #include "vulkan_driver.h"
++#include <unordered_map>
++#include "vulkan_utils.h"
+ 
+ namespace vulkan
+ {
+@@ -129,12 +131,141 @@ Driver::checkCurrentTextures()
+    return true;
+ }
+ 
++// A texture that is also a colour target of the same draw: GPU7 lets a pixel read
++// its own target (in-place post-processing), Vulkan does not (undefined results,
++// garbage blocks on hardware with compressed render targets).  The draw samples a
++// copy of the target taken after the previous draws instead.
++struct FeedbackCopy
++{
++   vk::Image sourceImage;
++   vk::Image image;
++   vk::DeviceMemory memory;
++   SurfaceViewObject view;
++};
++
++static std::unordered_map<SurfaceViewObject *, FeedbackCopy> sFeedbackCopies;
++
++void
++Driver::resolveTextureFeedback()
++{
++   auto framebuffer = mCurrentDraw->framebuffer;
++   if (!framebuffer) {
++      return;
++   }
++
++   auto isTarget = [&](SurfaceViewObject *view) {
++      for (auto target : framebuffer->colorSurfaces) {
++         if (target && view && view->surface && target->surface == view->surface) {
++            return true;
++         }
++      }
++      return false;
++   };
++
++   auto found = false;
++   for (auto stage = 0u; stage < 3; ++stage) {
++      for (auto i = 0u; i < latte::MaxTextures; ++i) {
++         found = found || isTarget(mCurrentDraw->textures[stage][i]);
++      }
++   }
++   if (!found) {
++      return;
++   }
++
++   // The previous draws of this render pass must land in the target first
++   // (flushing replays them through mCurrentDraw)
++   auto currentDraw = mCurrentDraw;
++   flushPendingDraws();
++   mCurrentDraw = currentDraw;
++
++   for (auto stage = 0u; stage < 3; ++stage) {
++      for (auto i = 0u; i < latte::MaxTextures; ++i) {
++         auto &texture = mCurrentDraw->textures[stage][i];
++         if (!isTarget(texture)) {
++            continue;
++         }
++
++         auto source = texture->surface;
++         if (source->desc.dim != latte::SQ_TEX_DIM::DIM_2D &&
++             source->desc.dim != latte::SQ_TEX_DIM::DIM_2D_ARRAY) {
++            continue;
++         }
++
++         auto hostFormat = getVkSurfaceFormat(source->desc.format, source->desc.tileType);
++         auto &copy = sFeedbackCopies[texture];
++         if (copy.sourceImage != source->image) {
++            vk::ImageCreateInfo imageDesc;
++            imageDesc.imageType = vk::ImageType::e2D;
++            imageDesc.format = hostFormat;
++            imageDesc.extent = vk::Extent3D(source->width, source->height, 1);
++            imageDesc.mipLevels = 1;
++            imageDesc.arrayLayers = source->arrayLayers;
++            imageDesc.samples = vk::SampleCountFlagBits::e1;
++            imageDesc.tiling = vk::ImageTiling::eOptimal;
++            imageDesc.usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst;
++            imageDesc.sharingMode = vk::SharingMode::eExclusive;
++            imageDesc.initialLayout = vk::ImageLayout::eUndefined;
++            copy.image = mDevice.createImage(imageDesc);
++
++            auto memReqs = mDevice.getImageMemoryRequirements(copy.image);
++            vk::MemoryAllocateInfo allocDesc;
++            allocDesc.allocationSize = memReqs.size;
++            allocDesc.memoryTypeIndex = findMemoryType(memReqs.memoryTypeBits, vk::MemoryPropertyFlagBits::eDeviceLocal);
++            copy.memory = mDevice.allocateMemory(allocDesc);
++            mDevice.bindImageMemory(copy.image, copy.memory, 0);
++
++            vk::ImageViewCreateInfo viewDesc;
++            viewDesc.image = copy.image;
++            viewDesc.viewType = source->desc.dim == latte::SQ_TEX_DIM::DIM_2D ? vk::ImageViewType::e2D : vk::ImageViewType::e2DArray;
++            viewDesc.format = hostFormat;
++            viewDesc.components.r = getVkComponentSwizzle(texture->desc->channels[0]);
++            viewDesc.components.g = getVkComponentSwizzle(texture->desc->channels[1]);
++            viewDesc.components.b = getVkComponentSwizzle(texture->desc->channels[2]);
++            viewDesc.components.a = getVkComponentSwizzle(texture->desc->channels[3]);
++            viewDesc.subresourceRange = texture->subresRange;
++            copy.view.imageView = mDevice.createImageView(viewDesc);
++            copy.view.surface = nullptr; // marks a feedback copy (see prepareCurrentTextures)
++            copy.view.subresRange = texture->subresRange;
++            copy.sourceImage = source->image;
++         }
++
++         // Source to transfer, copy to transfer destination, copy back to sampling
++         SurfaceSubRange range { 0, source->arrayLayers };
++         transitionSurface(source, ResourceUsage::TransferSrc, vk::ImageLayout::eTransferSrcOptimal, range, true);
++
++         auto fullRange = vk::ImageSubresourceRange(source->subresRange.aspectMask, 0, 1, 0, source->arrayLayers);
++         auto toDst = vk::ImageMemoryBarrier({}, vk::AccessFlagBits::eTransferWrite,
++                                              vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal,
++                                              VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED, copy.image, fullRange);
++         mActiveCommandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eAllCommands, vk::PipelineStageFlagBits::eTransfer,
++                                              {}, {}, {}, { toDst });
++
++         vk::ImageCopy region;
++         region.srcSubresource = { source->subresRange.aspectMask, 0, 0, source->arrayLayers };
++         region.dstSubresource = { source->subresRange.aspectMask, 0, 0, source->arrayLayers };
++         region.extent = vk::Extent3D { source->width, source->height, 1 };
++         mActiveCommandBuffer.copyImage(source->image, vk::ImageLayout::eTransferSrcOptimal,
++                                        copy.image, vk::ImageLayout::eTransferDstOptimal, { region });
++
++         auto toRead = vk::ImageMemoryBarrier(vk::AccessFlagBits::eTransferWrite, vk::AccessFlagBits::eShaderRead,
++                                               vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal,
++                                               VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED, copy.image, fullRange);
++         mActiveCommandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eAllCommands,
++                                              {}, {}, {}, { toRead });
++
++         // A blank description, so that the next draw recomputes its texture
++         copy.view.desc = HashedDesc<SurfaceViewDesc>();
++         texture = &copy.view;
++      }
++   }
++}
++
+ void
+ Driver::prepareCurrentTextures()
+ {
+    for (auto i = 0u; i < latte::MaxTextures; ++i) {
+       auto& vsSurface = mCurrentDraw->textures[0][i];
+-      if (vsSurface) {
++      if (vsSurface && vsSurface->surface) {
+          if (!mCurrentDraw->textureDirty[0][i]) {
+             transitionSurfaceView(vsSurface, ResourceUsage::VertexTexture, vk::ImageLayout::eShaderReadOnlyOptimal, true);
+          } else {
+@@ -144,7 +275,7 @@ Driver::prepareCurrentTextures()
+       }
+ 
+       auto& gsSurface = mCurrentDraw->textures[1][i];
+-      if (gsSurface) {
++      if (gsSurface && gsSurface->surface) {
+          if (!mCurrentDraw->textureDirty[1][i]) {
+             transitionSurfaceView(gsSurface, ResourceUsage::GeometryTexture, vk::ImageLayout::eShaderReadOnlyOptimal, true);
+          } else {
+@@ -154,7 +285,7 @@ Driver::prepareCurrentTextures()
+       }
+ 
+       auto& psSurface = mCurrentDraw->textures[2][i];
+-      if (psSurface) {
++      if (psSurface && psSurface->surface) {
+          if (!mCurrentDraw->textureDirty[2][i]) {
+             transitionSurfaceView(psSurface, ResourceUsage::PixelTexture, vk::ImageLayout::eShaderReadOnlyOptimal, true);
+          } else {
 diff --git a/src/libgpu/src/vulkan/vulkan_utils.cpp b/src/libgpu/src/vulkan/vulkan_utils.cpp
 index 49414c3..b8ca605 100644
 --- a/src/libgpu/src/vulkan/vulkan_utils.cpp
