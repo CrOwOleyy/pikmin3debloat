@@ -337,6 +337,51 @@ bool guardInitFetchShader(PPCContext& ctx)
     return false;
 }
 
+// --probe : textures de pixels distinctes par (dimension, format, mode de tuile, compSel).
+bool guardSetPixelTextureProbe(PPCContext& ctx)
+{
+    if (guardSetPixelTexture(ctx))
+        return true;
+    if (!rt::g_probe || !ctx.r3.u32)
+        return false;
+    static std::mutex lock;
+    static std::set<std::string> seen;
+    const uint32_t t = ctx.r3.u32;
+    char text[160];
+    snprintf(text, sizeof(text), "dim=%u format=0x%X tile=%u compSel=0x%08X", rt::load32(t), rt::load32(t + 0x14),
+        rt::load32(t + 0x30), rt::load32(t + 0x84));
+    std::lock_guard guard(lock);
+    if (seen.insert(text).second)
+        RT_INFO("SONDE texture %s (%ux%u, mips %u, slot %u)", text, rt::load32(t + 4), rt::load32(t + 8),
+            rt::load32(t + 0x10), ctx.r4.u32);
+    return false;
+}
+
+// --probe : contenu distinct du bloc uniforme 2 des sommets (brouillard du décor : vec4 2 à 4).
+bool guardSetVertexUniformBlockProbe(PPCContext& ctx)
+{
+    if (guardSetVertexUniformBlock(ctx))
+        return true;
+    if (!rt::g_probe || ctx.r3.u32 != 2 || !ctx.r5.u32 || ctx.r4.u32 < 80)
+        return false;
+    static std::mutex lock;
+    static std::set<std::string> seen;
+    std::string text;
+    for (uint32_t i = 8; i < 20; i++)
+    {
+        const uint32_t bits = rt::load32(ctx.r5.u32 + i * 4);
+        float f;
+        memcpy(&f, &bits, 4);
+        char v[24];
+        snprintf(v, sizeof(v), i % 4 == 3 ? "%g | " : "%g ", f);
+        text += v;
+    }
+    std::lock_guard guard(lock);
+    if (seen.size() < 40 && seen.insert(text).second)
+        RT_INFO("SONDE bloc VS 2 (taille %u, lr=0x%08X) : %s", ctx.r4.u32, uint32_t(ctx.lr), text.c_str());
+    return false;
+}
+
 const std::unordered_map<std::string, Guard> kGuards = {
     { "GX2InitFetchShaderEx", guardInitFetchShader },
     { "GX2SetViewport", guardSetViewport },
@@ -346,14 +391,14 @@ const std::unordered_map<std::string, Guard> kGuards = {
     { "GX2SetPixelSampler", guardSetPixelSampler },
     { "GX2SetVertexSampler", guardSetVertexSampler },
     { "GX2SetGeometrySampler", guardSetGeometrySampler },
-    { "GX2SetPixelTexture", guardSetPixelTexture },
+    { "GX2SetPixelTexture", guardSetPixelTextureProbe },
     { "GX2SetVertexTexture", guardSetVertexTexture },
     { "GX2SetGeometryTexture", guardSetGeometryTexture },
     { "GX2SetPixelSamplerBorderColor", guardSetPixelSamplerBorderColor },
     { "GX2SetVertexSamplerBorderColor", guardSetVertexSamplerBorderColor },
     { "GX2SetGeometrySamplerBorderColor", guardSetGeometrySamplerBorderColor },
     { "GX2SetPixelUniformBlock", guardSetPixelUniformBlock },
-    { "GX2SetVertexUniformBlock", guardSetVertexUniformBlock },
+    { "GX2SetVertexUniformBlock", guardSetVertexUniformBlockProbe },
     { "GX2SetGeometryUniformBlock", guardSetGeometryUniformBlock },
     { "GX2SetVertexShader", guardSetVertexShader },
     { "GX2SetPixelShader", guardSetPixelShader },

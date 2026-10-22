@@ -138,6 +138,8 @@ void gpuStart()
    settings.display.viewMode = g_splitView ? gpu::DisplaySettings::Split : gpu::DisplaySettings::TV;
    settings.display.backgroundColour = { 0, 0, 0 };
    settings.display.maintainAspectRatio = true;
+   // DECAF_DUMP_SHADERS : shaders du jeu (binaire Latte désassemblé + SPIR-V) dans dump/.
+   settings.debug.dump_shaders = getenv("DECAF_DUMP_SHADERS") != nullptr;
    gpu::setConfig(settings);
 
    s_driver = gpu::createGraphicsDriver(gpu::GraphicsDriverType::Vulkan);

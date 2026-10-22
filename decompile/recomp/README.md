@@ -359,6 +359,23 @@ ligne 0) et c'est l'affichage final (`vulkan_display.cpp`) qui retourne l'image.
 
 ![Intro, forêt enneigée](docs/intro_foret.png)
 
+### Shaders du décor (en cours)
+
+Arbres blancs et unis, sol noir. Diagnostic (outils ci-dessous) : les textures sont bonnes
+(écorce, cartes de normales), c'est le **brouillard** qui sature : le shader de pixels finit par
+`mix(éclairage, R0.rgb, R0.w)` et `R0.w` vaut ~1 sur les arbres. Le facteur vient du shader de
+sommets : `clamp((dot(position, CB2[3].xyz) - CB2[3].w) * CB2[4].x)`, bloc uniforme 2. Cause pas
+encore trouvée (paramètres du bloc 2 côté CPU, ou position d'entrée). Corrections déjà faites au
+traducteur de decaf en chemin (conformes à la spécification GPU7) :
+- `MUL`, `MULADD`, `DOT4` non-IEEE : un produit par 0 vaut 0 même avec inf/NaN ;
+- `EXP_IEEE`/`LOG_IEEE` en base 2 (decaf utilisait exp/ln) ; `LOG_CLAMPED` borne -inf ;
+- `GET_COMP_TEX_LOD` sur cube map : 2 coordonnées (SPIR-V invalide auparavant).
+
+Outils de diagnostic (variables d'environnement) :
+- `DECAF_DUMP_SHADERS=1` : shaders du jeu désassemblés + SPIR-V dans `recomp/dump/` (non versionné) ;
+- `DECAF_DEBUG_FIRST_TEX=N` : les shaders de matériau (3 entrées ou plus) affichent leur N-ième texture ;
+- `DECAF_DEBUG_INPUT0=C` : ils affichent la composante C (0-3) de leur première entrée, en gris.
+
 ## Affichage TV seul et commandes (2026-10-22)
 
 - **Affichage** : `gpu_window.cpp` règle libgpu en `ViewMode::TV`, fond noir, ratio conservé (au

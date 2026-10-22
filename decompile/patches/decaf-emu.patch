@@ -14,6 +14,103 @@ index 8e998c9..c97c57e 100644
  
           vfetch.word1 = vfetch.word1
              .DST_SEL_W(static_cast<latte::SQ_SEL>(attrib.mask & 0x7))
+diff --git a/src/libgpu/src/spirv/spirv_alu_op2.cpp b/src/libgpu/src/spirv/spirv_alu_op2.cpp
+index 91a6739..ea66b0e 100644
+--- a/src/libgpu/src/spirv/spirv_alu_op2.cpp
++++ b/src/libgpu/src/spirv/spirv_alu_op2.cpp
+@@ -73,7 +73,7 @@ void Transpiler::translateAluOp2_EXP_IEEE(const ControlFlowInst &cf, const AluIn
+ {
+    auto src0 = mSpv->readAluInstSrc(cf, group, inst, 0);
+ 
+-   auto output = mSpv->createBuiltinCall(mSpv->floatType(), mSpv->glslStd450(), GLSLstd450::GLSLstd450Exp, { src0 });
++   auto output = mSpv->createBuiltinCall(mSpv->floatType(), mSpv->glslStd450(), GLSLstd450::GLSLstd450Exp2, { src0 });
+ 
+    mSpv->writeAluOpDest(cf, group, unit, inst, output);
+ }
+@@ -296,15 +296,21 @@ void Transpiler::translateAluOp2_KILLGE_UINT(const ControlFlowInst &cf, const Al
+ 
+ void Transpiler::translateAluOp2_LOG_CLAMPED(const ControlFlowInst &cf, const AluInstructionGroup &group, SQ_CHAN unit, const AluInst &inst)
+ {
+-   // TODO: Implement log clamp-to-maxval
+-   translateAluOp2_LOG_IEEE(cf, group, unit, inst);
++   // log2(0) = -inf is clamped to -MAX_FLOAT
++   auto src0 = mSpv->readAluInstSrc(cf, group, inst, 0, latte::VarRefType::FLOAT);
++
++   auto log = mSpv->createBuiltinCall(mSpv->floatType(), mSpv->glslStd450(), GLSLstd450::GLSLstd450Log2, { src0 });
++   auto lowest = mSpv->makeFloatConstant(std::numeric_limits<float>::lowest());
++   auto output = mSpv->createBuiltinCall(mSpv->floatType(), mSpv->glslStd450(), GLSLstd450::GLSLstd450FMax, { log, lowest });
++
++   mSpv->writeAluOpDest(cf, group, unit, inst, output);
+ }
+ 
+ void Transpiler::translateAluOp2_LOG_IEEE(const ControlFlowInst &cf, const AluInstructionGroup &group, SQ_CHAN unit, const AluInst &inst)
+ {
+    auto src0 = mSpv->readAluInstSrc(cf, group, inst, 0, latte::VarRefType::FLOAT);
+ 
+-   auto output = mSpv->createBuiltinCall(mSpv->floatType(), mSpv->glslStd450(), GLSLstd450::GLSLstd450Log, { src0 });
++   auto output = mSpv->createBuiltinCall(mSpv->floatType(), mSpv->glslStd450(), GLSLstd450::GLSLstd450Log2, { src0 });
+ 
+    mSpv->writeAluOpDest(cf, group, unit, inst, output);
+ }
+@@ -441,9 +447,13 @@ void Transpiler::translateAluOp2_MOVA_INT(const ControlFlowInst &cf, const AluIn
+ 
+ void Transpiler::translateAluOp2_MUL(const ControlFlowInst &cf, const AluInstructionGroup &group, SQ_CHAN unit, const AluInst &inst)
+ {
+-   // Everyone gets to enjoy the IEEE standards since Vulkan is IEEE
+-   // TODO: Check if there are any side-effects of making MUL be IEEE compliant.
+-   translateAluOp2_MUL_IEEE(cf, group, unit, inst);
++   // Non-IEEE multiply: 0 * anything (inf, NaN) = 0
++   auto src0 = mSpv->readAluInstSrc(cf, group, inst, 0);
++   auto src1 = mSpv->readAluInstSrc(cf, group, inst, 1);
++
++   auto output = mulLegacy(mSpv->floatType(), src0, src1);
++
++   mSpv->writeAluOpDest(cf, group, unit, inst, output);
+ }
+ 
+ void Transpiler::translateAluOp2_MUL_IEEE(const ControlFlowInst &cf, const AluInstructionGroup &group, SQ_CHAN unit, const AluInst &inst)
+diff --git a/src/libgpu/src/spirv/spirv_alu_op3.cpp b/src/libgpu/src/spirv/spirv_alu_op3.cpp
+index 8408f80..a3d508c 100644
+--- a/src/libgpu/src/spirv/spirv_alu_op3.cpp
++++ b/src/libgpu/src/spirv/spirv_alu_op3.cpp
+@@ -74,7 +74,15 @@ void Transpiler::translateAluOp3_CNDGE_INT(const ControlFlowInst &cf, const AluI
+ 
+ void Transpiler::translateAluOp3_MULADD(const ControlFlowInst &cf, const AluInstructionGroup &group, SQ_CHAN unit, const AluInst &inst)
+ {
+-   translateAluOp3_MULADD_IEEE(cf, group, unit, inst);
++   // Non-IEEE multiply: 0 * anything (inf, NaN) = 0
++   auto src0 = mSpv->readAluInstSrc(cf, group, inst, 0);
++   auto src1 = mSpv->readAluInstSrc(cf, group, inst, 1);
++   auto src2 = mSpv->readAluInstSrc(cf, group, inst, 2);
++
++   auto muled = mulLegacy(mSpv->floatType(), src0, src1);
++   auto output = mSpv->createBinOp(spv::Op::OpFAdd, mSpv->floatType(), muled, src2);
++
++   mSpv->writeAluOpDest(cf, group, unit, inst, output);
+ }
+ 
+ void Transpiler::translateAluOp3_MULADD_IEEE(const ControlFlowInst &cf, const AluInstructionGroup &group, SQ_CHAN unit, const AluInst &inst)
+diff --git a/src/libgpu/src/spirv/spirv_alu_reduc.cpp b/src/libgpu/src/spirv/spirv_alu_reduc.cpp
+index daa5f05..08d7bcf 100644
+--- a/src/libgpu/src/spirv/spirv_alu_reduc.cpp
++++ b/src/libgpu/src/spirv/spirv_alu_reduc.cpp
+@@ -147,7 +147,15 @@ void Transpiler::translateAluOp2_CUBE(const ControlFlowInst &cf, const AluInstru
+ 
+ void Transpiler::translateAluOp2_DOT4(const ControlFlowInst &cf, const AluInstructionGroup &group, SQ_CHAN unit, const AluInst &inst)
+ {
+-   translateAluOp2_DOT4_IEEE(cf, group, unit, inst);
++   // Non-IEEE products: 0 * anything (inf, NaN) = 0
++   auto src0 = mSpv->readAluReducSrc(cf, group, 0);
++   auto src1 = mSpv->readAluReducSrc(cf, group, 1);
++
++   auto products = mulLegacy(mSpv->float4Type(), src0, src1);
++   auto output = mSpv->createBinOp(spv::Op::OpDot, mSpv->floatType(), products, mSpv->makeCompositeConstant(mSpv->float4Type(), {
++      mSpv->makeFloatConstant(1.0f), mSpv->makeFloatConstant(1.0f), mSpv->makeFloatConstant(1.0f), mSpv->makeFloatConstant(1.0f) }));
++
++   mSpv->writeAluReducDest(cf, group, output);
+ }
+ 
+ void Transpiler::translateAluOp2_DOT4_IEEE(const ControlFlowInst &cf, const AluInstructionGroup &group, SQ_CHAN unit, const AluInst &inst)
 diff --git a/src/libgpu/src/spirv/spirv_cf.cpp b/src/libgpu/src/spirv/spirv_cf.cpp
 index 430bab1..a049f30 100644
 --- a/src/libgpu/src/spirv/spirv_cf.cpp
@@ -73,11 +170,43 @@ index 430bab1..a049f30 100644
  }
  
  void Transpiler::translateCf_EMIT_VERTEX(const ControlFlowInst &cf)
+diff --git a/src/libgpu/src/spirv/spirv_export.cpp b/src/libgpu/src/spirv/spirv_export.cpp
+index 32ecfd1..8b90d96 100644
+--- a/src/libgpu/src/spirv/spirv_export.cpp
++++ b/src/libgpu/src/spirv/spirv_export.cpp
+@@ -96,6 +96,15 @@ void Transpiler::translateGenericExport(const ControlFlowInst &cf)
+             auto pixelFormat = mPixelOutType[exportRef.output.arrayBase];
+             if (pixelFormat == PixelOutputType::FLOAT) {
+                // We are already in the right format, nothing to do here...
++               if (debugInput0() && mDebugMaterial && mDebugInput0 != spv::NoResult) {
++                  auto v = mSpv->createOp(spv::OpCompositeExtract, mSpv->floatType(), { mDebugInput0, static_cast<unsigned>(atoi(debugInput0()) & 3) });
++                  sourceVal = mSpv->createCompositeConstruct(mSpv->float4Type(), { v, v, v, mSpv->makeFloatConstant(1.0f) });
++               }
++               if (debugFirstTex() && mDebugFirstTexVar != spv::NoResult) {
++                  auto tex = mSpv->createLoad(mDebugFirstTexVar, spv::NoPrecision);
++                  sourceVal = mSpv->createOp(spv::OpCompositeInsert, mSpv->float4Type(),
++                                             { mSpv->makeFloatConstant(1.0f), tex, 3 });
++               }
+             } else if (pixelFormat == PixelOutputType::SINT) {
+                sourceVal = mSpv->createUnaryOp(spv::OpBitcast, mSpv->int4Type(), sourceVal);
+             } else if (pixelFormat == PixelOutputType::UINT) {
 diff --git a/src/libgpu/src/spirv/spirv_tex.cpp b/src/libgpu/src/spirv/spirv_tex.cpp
-index 016af0f..038cd62 100644
+index 016af0f..2174205 100644
 --- a/src/libgpu/src/spirv/spirv_tex.cpp
 +++ b/src/libgpu/src/spirv/spirv_tex.cpp
-@@ -427,6 +427,59 @@ void Transpiler::translateTex_GET_TEXTURE_INFO(const ControlFlowInst &cf, const
+@@ -256,6 +256,11 @@ void Transpiler::translateGenericSample(const ControlFlowInst &cf, const Texture
+    } else {
+       if (texFormat == TextureInputType::FLOAT) {
+          output = mSpv->createOp(sampleOp, mSpv->float4Type(), sampleParams);
++
++         if (debugFirstTex() && mType == ShaderParser::Type::Pixel && mDebugMaterial && ++mDebugSampleCount == debugFirstTex()) {
++            mDebugFirstTexVar = mSpv->createVariable(spv::NoPrecision, spv::StorageClassPrivate, mSpv->float4Type(), "_debugFirstTex");
++            mSpv->createStore(output, mDebugFirstTexVar);
++         }
+       } else if (texFormat == TextureInputType::INT) {
+          output = mSpv->createOp(sampleOp, mSpv->uint4Type(), sampleParams);
+       } else {
+@@ -427,6 +432,60 @@ void Transpiler::translateTex_GET_TEXTURE_INFO(const ControlFlowInst &cf, const
     mSpv->writeGprMaskRef(destGpr, output);
  }
  
@@ -119,10 +248,11 @@ index 016af0f..038cd62 100644
 +         coords = mSpv->createOp(spv::OpCompositeExtract, mSpv->floatType(), { srcGprVal, 0 });
 +         break;
 +      case latte::SQ_TEX_DIM::DIM_3D:
-+      case latte::SQ_TEX_DIM::DIM_CUBEMAP:
 +         coords = mSpv->createOp(spv::OpVectorShuffle, mSpv->float3Type(), { srcGprVal, srcGprVal, 0, 1, 2 });
 +         break;
 +      default:
++         // 2D, 2D arrays and cubemaps (bound as 2D arrays, face in z): the
++         // query takes no array layer.
 +         coords = mSpv->createOp(spv::OpVectorShuffle, mSpv->float2Type(), { srcGprVal, srcGprVal, 0, 1 });
 +      }
 +
@@ -137,8 +267,27 @@ index 016af0f..038cd62 100644
  void Transpiler::translateTex_SET_CUBEMAP_INDEX(const ControlFlowInst &cf, const TextureFetchInst &inst)
  {
     // TODO: It is possible that we are supposed to somehow force
+diff --git a/src/libgpu/src/spirv/spirv_transpiler.cpp b/src/libgpu/src/spirv/spirv_transpiler.cpp
+index 3b51f14..fcd76dd 100644
+--- a/src/libgpu/src/spirv/spirv_transpiler.cpp
++++ b/src/libgpu/src/spirv/spirv_transpiler.cpp
+@@ -486,8 +486,14 @@ bool Transpiler::translate(const ShaderDesc& shaderDesc, Shader *shader)
+       state.mCbShaderControl = psDesc.regs.cb_shader_control;
+       state.mCbShaderMask = psDesc.regs.cb_shader_mask;
+       state.mDbShaderControl = psDesc.regs.db_shader_control;
++      state.mDebugMaterial = psDesc.regs.spi_ps_in_control_0.NUM_INTERP() >= 3;
+ 
+       Transpiler::writePixelProlog(spvGen, psDesc);
++
++      if (debugInput0()) {
++         auto gprRef = spvGen.getGprRef({ 0, latte::GprIndexMode::None });
++         state.mDebugInput0 = spvGen.createLoad(gprRef, spv::NoPrecision);
++      }
+    }
+ 
+    state.translate();
 diff --git a/src/libgpu/src/spirv/spirv_transpiler.h b/src/libgpu/src/spirv/spirv_transpiler.h
-index 71cd2f9..26cc67d 100644
+index 71cd2f9..45b64b9 100644
 --- a/src/libgpu/src/spirv/spirv_transpiler.h
 +++ b/src/libgpu/src/spirv/spirv_transpiler.h
 @@ -43,6 +43,7 @@ public:
@@ -149,7 +298,49 @@ index 71cd2f9..26cc67d 100644
     void translateTex_SET_CUBEMAP_INDEX(const ControlFlowInst &cf, const TextureFetchInst &inst) override;
     void translateTex_GET_GRADIENTS_H(const ControlFlowInst &cf, const TextureFetchInst &inst) override;
     void translateTex_GET_GRADIENTS_V(const ControlFlowInst &cf, const TextureFetchInst &inst) override;
-@@ -244,6 +245,7 @@ protected:
+@@ -226,6 +227,41 @@ protected:
+    std::array<uint32_t, latte::MaxStreamOutBuffers> mStreamOutStride;
+    latte::PA_CL_VS_OUT_CNTL mPaClVsOutCntl;
+    std::array<PixelOutputType, latte::MaxRenderTargets> mPixelOutType;
++
++   // Debug (DECAF_DEBUG_FIRST_TEX=1): pixel shaders output their first sampled texture.
++   // GPU7 non-IEEE multiply (MUL, MULADD, DOT4...): a product with a zero operand
++   // is zero, even when the other operand is inf or NaN.
++   spv::Id mulLegacy(spv::Id type, spv::Id a, spv::Id b)
++   {
++      auto isVector = type != mSpv->floatType();
++      auto zero = mSpv->makeFloatConstant(0.0f);
++      auto zeros = isVector ? mSpv->makeCompositeConstant(type, { zero, zero, zero, zero }) : zero;
++      auto boolType = isVector ? mSpv->makeVectorType(mSpv->boolType(), 4) : mSpv->boolType();
++
++      auto product = mSpv->createBinOp(spv::Op::OpFMul, type, a, b);
++      auto aZero = mSpv->createBinOp(spv::Op::OpFOrdEqual, boolType, a, zeros);
++      auto bZero = mSpv->createBinOp(spv::Op::OpFOrdEqual, boolType, b, zeros);
++      auto anyZero = mSpv->createBinOp(spv::Op::OpLogicalOr, boolType, aZero, bZero);
++      return mSpv->createTriOp(spv::Op::OpSelect, type, anyZero, zeros, product);
++   }
++
++   // DECAF_DEBUG_FIRST_TEX=N picks the Nth sample instruction of the shader.
++   spv::Id mDebugFirstTexVar = spv::NoResult;
++   int mDebugSampleCount = 0;
++   // DECAF_DEBUG_INPUT0=N: material pixel shaders output component N (0-3) of
++   // their first input, as a grey level.
++   spv::Id mDebugInput0 = spv::NoResult;
++   static const char *debugInput0()
++   {
++      static const char *value = getenv("DECAF_DEBUG_INPUT0");
++      return value;
++   }
++   bool mDebugMaterial = false; // 3+ interpolated inputs: not a full-screen pass
++   static int debugFirstTex()
++   {
++      static const char *value = getenv("DECAF_DEBUG_FIRST_TEX");
++      return value ? atoi(value) : 0;
++   }
+    latte::SQ_PGM_EXPORTS_PS mSqPgmExportsPs;
+    latte::CB_SHADER_CONTROL mCbShaderControl;
+    latte::CB_SHADER_MASK mCbShaderMask;
+@@ -244,6 +280,7 @@ protected:
        spv::Block *body;
        spv::Block *continue_target;
        spv::Block *merge;
