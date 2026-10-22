@@ -102,3 +102,19 @@ target_include_directories(decaf_gx2 PUBLIC
 target_compile_options(decaf_gx2 PRIVATE ${DECAF_OPTIONS} /FIchrono)
 target_link_libraries(decaf_gx2 PUBLIC decaf_gpu)
 set_target_properties(decaf_gx2 PROPERTIES CXX_STANDARD 17)
+
+# ---------------------------------------------------------------- outil : latte-assembler
+# Assembleur de shaders Latte de decaf (texte → .gsh), pour reconstruire lyt_BuildinShader.gsh
+# (shaders/). Hors de la cible par défaut : cmake --build build --target latte_assembler
+set(LATTE_ASM_DIR ${DECAF_DIR}/tools/latte-assembler)
+file(GLOB LATTE_ASM_SOURCES ${LATTE_ASM_DIR}/src/*.cpp ${DECAF_SRC}/libgfd/src/*.cpp)
+set(LATTE_ASM_GRAMMAR_H ${CMAKE_CURRENT_BINARY_DIR}/latte_asm/grammar.h)
+file(READ ${LATTE_ASM_DIR}/resources/grammar.txt LATTE_ASM_GRAMMAR)
+file(WRITE ${LATTE_ASM_GRAMMAR_H} "const char *LatteGrammar = R\"(\n${LATTE_ASM_GRAMMAR})\";\n")
+add_executable(latte_assembler EXCLUDE_FROM_ALL ${LATTE_ASM_SOURCES})
+target_include_directories(latte_assembler PRIVATE ${LATTE_ASM_DIR}/src ${CMAKE_CURRENT_BINARY_DIR}/latte_asm
+    ${DECAF_SRC}/libgfd ${DECAF_SRC}/libdecaf/src ${DECAF_SRC}/libdecaf ${DECAF_LIBS}/excmd/src ${DECAF_LIBS}/cpp-peglib
+    ${DECAF_LIBS}/glslang)
+target_compile_options(latte_assembler PRIVATE ${DECAF_OPTIONS} /FIchrono)
+target_link_libraries(latte_assembler PRIVATE decaf_gpu)
+set_target_properties(latte_assembler PROPERTIES CXX_STANDARD 17)

@@ -209,22 +209,53 @@ SLOT_GUARD(SetGeometryUniformBlock, r3, 0x10)
 // GX2Set{Vertex,Pixel}UniformReg(offset, count, data) : `offset` compte des vecteurs de 4 mots ;
 // les 16 bits hauts désignent une constante de boucle (32 au plus). Chaque étage dispose de
 // 256 vecteurs (1024 mots).
+// --probe : journalise une fenêtre d'envois de constantes (étage, décalage en mots, valeurs).
+void probeUniforms(const char* stage, PPCContext& ctx)
+{
+    static std::atomic<uint32_t> calls { 0 };
+    const uint32_t n = calls++;
+    if (n < 3000 || n >= 3080 || !ctx.r5.u32)
+        return;
+    float v[4];
+    for (int i = 0; i < 4; i++)
+    {
+        const uint32_t bits = rt::load32(ctx.r5.u32 + i * 4);
+        memcpy(&v[i], &bits, 4);
+    }
+    RT_INFO("SONDE %s offset=%d count=%u : %g %g %g %g", stage, int32_t(ctx.r3.u32), ctx.r4.u32, v[0], v[1], v[2], v[3]);
+}
+
 bool guardSetUniformReg(PPCContext& ctx)
 {
     static std::atomic<bool> warned { false };
     const uint32_t offset = ctx.r3.u32, count = ctx.r4.u32;
     const uint32_t loop = offset >> 16;
     const uint32_t low = loop ? (offset & 0x7FFF) : offset;
-    if (loop < 32 && uint64_t(low) * 4 + count <= 1024)
+    // offset et count en mots de 32 bits ; 256 vec4 (1024 mots) par étage.
+    if (loop < 32 && uint64_t(low) + count <= 1024)
         return false;
     if (!warned.exchange(true))
         RT_WARN("GX2 : GX2Set*UniformReg avec un décalage invalide (0x%X, %u mots) : ignoré", offset, count);
     return true;
 }
 
+bool guardSetVertexUniformReg(PPCContext& ctx)
+{
+    if (rt::g_probe)
+        probeUniforms("VS", ctx);
+    return guardSetUniformReg(ctx);
+}
+
+bool guardSetPixelUniformReg(PPCContext& ctx)
+{
+    if (rt::g_probe)
+        probeUniforms("PS", ctx);
+    return guardSetUniformReg(ctx);
+}
+
 const std::unordered_map<std::string, Guard> kGuards = {
-    { "GX2SetVertexUniformReg", guardSetUniformReg },
-    { "GX2SetPixelUniformReg", guardSetUniformReg },
+    { "GX2SetVertexUniformReg", guardSetVertexUniformReg },
+    { "GX2SetPixelUniformReg", guardSetPixelUniformReg },
     { "GX2SetPixelSampler", guardSetPixelSampler },
     { "GX2SetVertexSampler", guardSetVertexSampler },
     { "GX2SetGeometrySampler", guardSetGeometrySampler },

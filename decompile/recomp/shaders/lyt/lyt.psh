@@ -1,0 +1,41 @@
+; Shader de pixels de remplacement pour nw::lyt : couleur du sommet x texture 0.
+; Entrées : R0 = couleur (PARAM0), R1 = uv0 (PARAM1).
+;
+; $MODE = "UniformRegister"
+; $UNIFORM_VARS[0].NAME = "uTextureMode"
+; $UNIFORM_VARS[0].OFFSET = 0
+; $UNIFORM_VARS[1].NAME = "uInterpolateWidth"
+; $UNIFORM_VARS[1].OFFSET = 4
+; $UNIFORM_VARS[2].NAME = "uInterpolateOffset"
+; $UNIFORM_VARS[2].OFFSET = 8
+; $SAMPLER_VARS[0].NAME = "uTexture0"
+; $SAMPLER_VARS[0].TYPE = "sampler2D"
+; $SAMPLER_VARS[0].LOCATION = 0
+; $SAMPLER_VARS[1].NAME = "uTexture1"
+; $SAMPLER_VARS[1].TYPE = "sampler2D"
+; $SAMPLER_VARS[1].LOCATION = 1
+; $SAMPLER_VARS[2].NAME = "uTexture2"
+; $SAMPLER_VARS[2].TYPE = "sampler2D"
+; $SAMPLER_VARS[2].LOCATION = 2
+; $SQ_PGM_RESOURCES_PS.NUM_GPRS = 3
+; $SQ_PGM_RESOURCES_PS.STACK_SIZE = 0
+; $SPI_PS_IN_CONTROL_0.NUM_INTERP = 2
+; $SPI_PS_IN_CONTROL_0.PERSP_GRADIENT_ENA = true
+; $NUM_SPI_PS_INPUT_CNTL = 2
+; $SPI_PS_INPUT_CNTL[0].SEMANTIC = 0
+; $SPI_PS_INPUT_CNTL[0].DEFAULT_VAL = 1
+; $SPI_PS_INPUT_CNTL[1].SEMANTIC = 1
+; $SPI_PS_INPUT_CNTL[1].DEFAULT_VAL = 1
+; $SQ_PGM_EXPORTS_PS.EXPORT_MODE = 2
+; $CB_SHADER_MASK.OUTPUT0_ENABLE = 15
+; $CB_SHADER_CONTROL.RT0_ENABLE = true
+
+00 TEX: ADDR(48) CNT(1)
+   0  SAMPLE          R2, R1.xy0x, t0, s0
+01 ALU: ADDR(32) CNT(4)
+   1  x: MUL             R0.x, R0.x, R2.x
+      y: MUL             R0.y, R0.y, R2.y
+      z: MUL             R0.z, R0.z, R2.z
+      w: MUL             R0.w, R0.w, R2.w
+02 EXP_DONE: PIX0, R0.xyzw
+END_OF_PROGRAM

@@ -14,3 +14,64 @@ index 8e998c9..c97c57e 100644
  
           vfetch.word1 = vfetch.word1
              .DST_SEL_W(static_cast<latte::SQ_SEL>(attrib.mask & 0x7))
+diff --git a/tools/latte-assembler/src/gfd.cpp b/tools/latte-assembler/src/gfd.cpp
+index 27343e6..4133621 100644
+--- a/tools/latte-assembler/src/gfd.cpp
++++ b/tools/latte-assembler/src/gfd.cpp
+@@ -19,13 +19,13 @@ Matches:
+ static std::regex
+ sCommentKeyValueRegex
+ {
+-   ";[[:space:]]*\\$([_[:alnum:]]+)(?:\\[([[:digit:]]+)\\])?(?:\\.([_[:alnum:]]+))?[[:space:]]*=[[:space:]]*(\"[^\"]+\"|[0-9]+|0x[0-9a-fA-F]+|true|false|TRUE|FALSE)"
++   ";?[[:space:]]*\\$([_[:alnum:]]+)(?:\\[([[:digit:]]+)\\])?(?:\\.([_[:alnum:]]+))?[[:space:]]*=[[:space:]]*(\"[^\"]+\"|[0-9]+|0x[0-9a-fA-F]+|true|false|TRUE|FALSE)"
+ };
+ 
+ static std::regex
+ sCommentKeyValueStartRegex
+ {
+-   ";[[:space:]]*\\$"
++   ";?[[:space:]]*\\$"
+ };
+ 
+ bool
+diff --git a/tools/latte-assembler/src/gfd_psh_comment_parser.cpp b/tools/latte-assembler/src/gfd_psh_comment_parser.cpp
+index 228169f..30e5858 100644
+--- a/tools/latte-assembler/src/gfd_psh_comment_parser.cpp
++++ b/tools/latte-assembler/src/gfd_psh_comment_parser.cpp
+@@ -237,28 +237,28 @@ parseRegisterValue(latte::CB_SHADER_MASK &reg,
+ {
+    if (member == "OUTPUT0_ENABLE") {
+       reg = reg
+-         .OUTPUT0_ENABLE(parseValueBool(value));
++         .OUTPUT0_ENABLE(parseValueNumber(value));
+    } else if (member == "OUTPUT1_ENABLE") {
+       reg = reg
+-         .OUTPUT1_ENABLE(parseValueBool(value));
++         .OUTPUT1_ENABLE(parseValueNumber(value));
+    } else if (member == "OUTPUT2_ENABLE") {
+       reg = reg
+-         .OUTPUT2_ENABLE(parseValueBool(value));
++         .OUTPUT2_ENABLE(parseValueNumber(value));
+    } else if (member == "OUTPUT3_ENABLE") {
+       reg = reg
+-         .OUTPUT3_ENABLE(parseValueBool(value));
++         .OUTPUT3_ENABLE(parseValueNumber(value));
+    } else if (member == "OUTPUT4_ENABLE") {
+       reg = reg
+-         .OUTPUT4_ENABLE(parseValueBool(value));
++         .OUTPUT4_ENABLE(parseValueNumber(value));
+    } else if (member == "OUTPUT5_ENABLE") {
+       reg = reg
+-         .OUTPUT5_ENABLE(parseValueBool(value));
++         .OUTPUT5_ENABLE(parseValueNumber(value));
+    } else if (member == "OUTPUT6_ENABLE") {
+       reg = reg
+-         .OUTPUT6_ENABLE(parseValueBool(value));
++         .OUTPUT6_ENABLE(parseValueNumber(value));
+    } else if (member == "OUTPUT7_ENABLE") {
+       reg = reg
+-         .OUTPUT7_ENABLE(parseValueBool(value));
++         .OUTPUT7_ENABLE(parseValueNumber(value));
+    } else {
+       throw gfd_header_parse_exception {
+          fmt::format("CB_SHADER_MASK does not have member {}", member)
