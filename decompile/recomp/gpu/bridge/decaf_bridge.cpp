@@ -316,7 +316,29 @@ bool guardSetViewport(PPCContext& ctx)
     return false;
 }
 
+// --probe : formats d'attributs de sommets distincts (GX2AttribStream, 0x20 octets :
+// location, buffer, offset, format, type, aluDivisor, mask, endianSwap).
+bool guardInitFetchShader(PPCContext& ctx)
+{
+    static std::mutex lock;
+    static std::set<std::string> seen;
+    if (!rt::g_probe)
+        return false;
+    std::lock_guard guard(lock);
+    for (uint32_t i = 0; i < ctx.r5.u32 && i < 32; i++)
+    {
+        const uint32_t a = ctx.r6.u32 + i * 0x20;
+        char text[160];
+        snprintf(text, sizeof(text), "format=0x%X type=%u mask=0x%08X endian=%u", rt::load32(a + 12),
+            rt::load32(a + 16), rt::load32(a + 24), rt::load32(a + 28));
+        if (seen.insert(text).second)
+            RT_INFO("SONDE attribut %s (loc %u, lr=0x%08X)", text, rt::load32(a), uint32_t(ctx.lr));
+    }
+    return false;
+}
+
 const std::unordered_map<std::string, Guard> kGuards = {
+    { "GX2InitFetchShaderEx", guardInitFetchShader },
     { "GX2SetViewport", guardSetViewport },
     { "GX2SetShaders", guardSetShaders },
     { "GX2SetVertexUniformReg", guardSetVertexUniformReg },

@@ -183,6 +183,100 @@ index e96b29e..9c3a3d6 100644
     };
  
     // Allocate buffer
+diff --git a/src/libgpu/src/vulkan/vulkan_memcache.cpp b/src/libgpu/src/vulkan/vulkan_memcache.cpp
+index 49ac6e6..7e8fa68 100644
+--- a/src/libgpu/src/vulkan/vulkan_memcache.cpp
++++ b/src/libgpu/src/vulkan/vulkan_memcache.cpp
+@@ -207,6 +207,9 @@ Driver::_downloadMemCache(MemCacheObject *cache, SectionRange range)
+             // for more writes to this segment...
+             if (segment.lastChangeIndex == changeIndex) {
+                mMemTracker.markSegmentGpuDone(&segment);
++            } else {
++               // Memory was changed by this readback, not by the CPU
++               segment.gpuBaselinePending = true;
+             }
+          });
+       });
+@@ -357,6 +360,7 @@ Driver::_invalidateMemCache(MemCacheObject *cache, SectionRange range, const Del
+       segment.lastChangeIndex = changeIndex;
+       segment.lastChangeOwner = cache;
+       segment.gpuWritten = true;
++      segment.gpuBaselinePending = true;
+    });
+ 
+    if (delayedWriteFunc) {
+diff --git a/src/libgpu/src/vulkan/vulkan_memtracker.h b/src/libgpu/src/vulkan/vulkan_memtracker.h
+index 49b0258..14ba64e 100644
+--- a/src/libgpu/src/vulkan/vulkan_memtracker.h
++++ b/src/libgpu/src/vulkan/vulkan_memtracker.h
+@@ -49,6 +49,10 @@ public:
+       // that we do not overwrite a pending GPU write with random CPU data.
+       bool gpuWritten = false;
+ 
++      // Set with gpuWritten: dataState does not yet hold the memory contents seen
++      // at the time of the GPU write (taken at the next check, see _refreshSegment).
++      bool gpuBaselinePending = false;
++
+       // The last change for this segment
+       uint64_t lastChangeIndex = 0;
+ 
+@@ -111,6 +115,7 @@ public:
+    {
+       segment->dataState = cpu::getMemoryState(segment->address, segment->size);
+       segment->gpuWritten = false;
++      segment->gpuBaselinePending = false;
+    }
+ 
+    void refreshSegment(Segment *segment)
+@@ -210,6 +215,8 @@ protected:
+       // do any of the hashing work, it will be done during readback.
+       if (oldSegment->gpuWritten) {
+          newSegment->dataState = {};
++         newSegment->gpuBaselinePending = true;
++         oldSegment->gpuBaselinePending = true;
+          return newIter;
+       }
+ 
+@@ -325,16 +332,35 @@ protected:
+    {
+       // If this segment was last written by the GPU, then we are guarenteed
+       // to already have the most up to date data in a GPU buffer somewhere.
+-      if (segment->gpuWritten) {
+-         return;
+-      }
+-
+       // If this segment was already checked during this batch, there is no
+       // need to go check it again..
+       if (segment->lastCheckIndex >= mCurrentBatchIndex) {
+          return;
+       }
+ 
++      // If this segment was last written by the GPU, the most up to date data is
++      // in a GPU buffer somewhere, unless the CPU has since overwritten that memory
++      // (it was freed and reused, for example to load a texture): the CPU data then
++      // wins.  Guest memory is not updated by GPU writes that are not read back, so
++      // a change compared to the contents at the time of the GPU write can only
++      // come from the CPU.
++      if (segment->gpuWritten) {
++         auto dataState = cpu::getMemoryState(segment->address, segment->size);
++         segment->lastCheckIndex = mCurrentBatchIndex;
++
++         if (segment->gpuBaselinePending || segment->dataState == dataState) {
++            segment->dataState = dataState;
++            segment->gpuBaselinePending = false;
++            return;
++         }
++
++         segment->gpuWritten = false;
++         segment->dataState = dataState;
++         segment->lastChangeIndex = newChangeIndex();
++         segment->lastChangeOwner = nullptr;
++         return;
++      }
++
+       // Rehash all our data
+       auto dataState = cpu::getMemoryState(segment->address, segment->size);
+ 
 diff --git a/src/libgpu/src/vulkan/vulkan_viewscissor.cpp b/src/libgpu/src/vulkan/vulkan_viewscissor.cpp
 index 5789428..be3331a 100644
 --- a/src/libgpu/src/vulkan/vulkan_viewscissor.cpp

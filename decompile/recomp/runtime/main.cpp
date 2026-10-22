@@ -26,6 +26,7 @@ void gpuMessageLoop(void* gameThread);
 extern bool g_captureWindow;
 extern bool g_splitView;
 extern bool g_probe;
+extern uint32_t g_autoA;
 }
 
 namespace
@@ -184,6 +185,8 @@ int main(int argc, char** argv)
             g_splitView = true;
         else if (a == "--probe")
             g_probe = true;
+        else if (a == "--auto-a" && i + 1 < argc)
+            g_autoA = uint32_t(atoi(argv[++i]));
         else if (a == "--input-test")
             inputTest = true;
         else if (a == "--dump" && i + 1 < argc)
@@ -194,7 +197,7 @@ int main(int argc, char** argv)
             imagePath = fs::u8path(argv[++i]);
         else
         {
-            fprintf(stderr, "usage : pikmin3 [--root <dossier des données du jeu>] [--image carrot_linked.elf] [--trace] [--dump <secondes>] [--input-test]\n");
+            fprintf(stderr, "usage : pikmin3 [--root <dossier des données du jeu>] [--image carrot_linked.elf] [--trace] [--dump <secondes>] [--input-test] [--auto-a <ms>]\n");
             return 2;
         }
     }

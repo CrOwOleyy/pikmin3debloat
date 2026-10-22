@@ -68,6 +68,12 @@ static PPCContext* newContext()
     ctx->fpscr.loadFromHost();
     ctx->r2.u64 = s_sda2Base;
     ctx->r13.u64 = s_sdaBase;
+    // Registres de quantification des paired-singles, comme les initialise Cafe OS à la
+    // création d'un thread (decaf coreinit_thread.cpp) : GQR2-5 = u8, u16, s8, s16, échelle 0.
+    ctx->gqr[2] = 0x40004;
+    ctx->gqr[3] = 0x50005;
+    ctx->gqr[4] = 0x60006;
+    ctx->gqr[5] = 0x70007;
     return ctx;
 }
 

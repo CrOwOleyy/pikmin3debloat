@@ -148,10 +148,15 @@ void inputSetWindow(void* window)
     s_window = static_cast<HWND>(window);
 }
 
+// --auto-a <ms> : appuie sur A pendant 100 ms toutes les <ms> millisecondes (tests sans joueur).
+uint32_t g_autoA = 0;
+
 GamePadInput inputSampleGamePad()
 {
     GamePadInput in;
     sampleXInput(in);
+    if (g_autoA && GetTickCount64() % g_autoA < 100)
+        in.buttons |= vpad::A;
     const HWND window = s_window.load();
     if (window && GetForegroundWindow() == window)
     {

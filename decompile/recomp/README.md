@@ -337,6 +337,20 @@ ligne 0) et c'est l'affichage final (`vulkan_display.cpp`) qui retourne l'image.
 
 ![Première 3D](docs/premiere_3d.png)
 
+## Intro de l'histoire : corrections du rendu 3D (2026-10-22)
+
+- **GQR non initialisés** (`runtime/kernel.cpp`) : Cafe OS met GQR2-5 à u8, u16, s8, s16 à la
+  création de chaque thread ; nos contextes les laissaient à 0 (flottant), donc toute donnée
+  quantifiée lue par `psq_l` (animations, positions…) devenait n'importe quoi : grands polygones
+  étirés sur tout l'écran.
+- **Mémoire réutilisée après un rendu GPU** (`patches/decaf-emu.patch`, `vulkan_memtracker.h`) :
+  decaf cessait de surveiller les écritures CPU sur une zone écrite par le GPU (cible de rendu).
+  Quand le jeu libère cette mémoire et y charge une texture, decaf gardait l'ancien contenu
+  (aplats, pixels parasites). On garde maintenant l'empreinte de la mémoire au moment de
+  l'écriture GPU : si elle change ensuite, c'est le CPU et ses données l'emportent.
+- **`--auto-a <ms>`** : appuie sur A toutes les `<ms>` ms, pour faire défiler les dialogues
+  sans joueur (captures automatiques avec `--capture`).
+
 ## Affichage TV seul et commandes (2026-10-22)
 
 - **Affichage** : `gpu_window.cpp` règle libgpu en `ViewMode::TV`, fond noir, ratio conservé (au
@@ -388,7 +402,7 @@ python scripts\gen_recomp_config.py extracted\carrot.elf recomp\carrot_linked.el
 tools\XenonRecomp\build-win\XenonRecomp\XenonRecomp.exe recomp\config\carrot.toml recomp\runtime\ppc_context.h
 :: 3. Exécutable (vcvars64 + clang-cl + Ninja, configure au premier appel)
 recomp\build.bat
-recomp\build\pikmin3.exe            :: options : --split --capture --input-test --dump <s> --record <filtre> --trace --root <dossier des données>
+recomp\build\pikmin3.exe            :: options : --split --capture --input-test --auto-a <ms> --dump <s> --record <filtre> --trace --root <dossier des données>
 ```
 
 Le runtime (`runtime/`) : mémoire invitée 4 Gio (`memory.cpp`), table des fonctions et appels
