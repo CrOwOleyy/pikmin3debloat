@@ -330,11 +330,13 @@ Le décor 3D s'affiche (`docs/premiere_3d.png`), puis la première bulle de l'hi
 bonne convention pour ce jeu (la police du jeu place le haut des glyphes vers y = -1). Un essai
 de garder l'autre convention (viewport non retourné, image retournée à l'affichage, sens des
 faces inversé) reste disponible avec `DECAF_GPU7_ORIENTATION=1` mais met le texte à l'envers.
-**Problème ouvert** : le contenu d'interface rendu dans une image intermédiaire puis recomposé
-(bulle de l'intro « Hmm… C'est quoi, ce bruit ? », lueur des titres) sort retourné dans les deux
-orientations depuis la correction du culling ; il était correct avec l'orientation GPU7 et
-l'ancien culling. Piste : ces quads passent par notre shader lyt reconstruit et dépendent du sens
-des faces. Capture prête : `recomp/rdoc_684x234/` (non versionnée). La sonde `--probe` journalise chaque `GX2SetViewport` distinct.
+**Textures rendues par le GPU dans l'interface** : la bulle de l'intro et la lueur des titres
+passent par une image rendue par le GPU puis affichée dans un pane lyt. Ces images ont l'axe V
+inversé par rapport aux textures des fichiers ; le vrai `lyt_BuildinShader` en tenait compte.
+Le pont note la mémoire des cibles de couleur (`GX2SetColorBuffer`) et, après chaque
+`GX2SetPixelTexture` sur l'emplacement 0, écrit dans le registre C255 la transformation de V
+(`(1, -1)` pour une cible de rendu, `(0, 1)` sinon) que `lyt.psh` applique avant d'échantillonner.
+La sonde `--probe` journalise chaque `GX2SetViewport` distinct.
 
 ![Bulle de l'intro](docs/bulle_intro.png)
 

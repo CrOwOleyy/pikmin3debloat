@@ -2,6 +2,8 @@
 ;   couleur = couleur du sommet x (uInterpolateOffset + texture0 x uInterpolateWidth)
 ; (interpolation noir/blanc des matériaux : Offset = « noir », Width = « blanc » - « noir »).
 ; Entrées : R0 = couleur (PARAM0), R1 = uv0 (PARAM1).
+; V est d'abord transformé par C255 (v = C255.x + v * C255.y) : le pont (decaf_bridge.cpp)
+; y écrit (1, -1) quand la texture 0 est une cible de rendu du GPU, (0, 1) sinon.
 ;
 ; $MODE = "UniformRegister"
 ; $UNIFORM_VARS[0].NAME = "uTextureMode"
@@ -32,16 +34,18 @@
 ; $CB_SHADER_MASK.OUTPUT0_ENABLE = 15
 ; $CB_SHADER_CONTROL.RT0_ENABLE = true
 
-00 TEX: ADDR(48) CNT(1)
-   0  SAMPLE          R2, R1.xy0x, t0, s0
-01 ALU: ADDR(32) CNT(8)
-   1  x: MULADD          R2.x, R2.x, C1.x, C2.x
+00 ALU: ADDR(32) CNT(1)
+   0  y: MULADD          R1.y, R1.y, C255.y, C255.x
+01 TEX: ADDR(48) CNT(1)
+   1  SAMPLE          R2, R1.xy0x, t0, s0
+02 ALU: ADDR(33) CNT(8)
+   2  x: MULADD          R2.x, R2.x, C1.x, C2.x
       y: MULADD          R2.y, R2.y, C1.y, C2.y
       z: MULADD          R2.z, R2.z, C1.z, C2.z
       w: MULADD          R2.w, R2.w, C1.w, C2.w
-   2  x: MUL             R0.x, R0.x, R2.x
+   3  x: MUL             R0.x, R0.x, R2.x
       y: MUL             R0.y, R0.y, R2.y
       z: MUL             R0.z, R0.z, R2.z
       w: MUL             R0.w, R0.w, R2.w
-02 EXP_DONE: PIX0, R0.xyzw
+03 EXP_DONE: PIX0, R0.xyzw
 END_OF_PROGRAM

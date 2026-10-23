@@ -47,3 +47,9 @@ drapeaux du matériau, +0xC) ; sinon le jeu envoie le nombre de textures (0 ou 1
 Replace, Modulate, Add, AddSigned, Interpolate, Subtract, Dodge, Burn, Overlay, Indirect,
 BlendIndirect, EachIndirect : 2, 3, 4, 6, 2, 5, 7, 8, 9, 0xE, 0xF, 0x10. Pas encore exploité
 par `lyt.psh` (texture 0 seulement).
+
+## Textures rendues par le GPU (registre C255)
+
+Une texture d'interface peut venir d'une cible de rendu (bulle de dialogue, lueur des titres) :
+son axe V est alors inversé. Le pont (`gpu/bridge/decaf_bridge.cpp`, `afterSetPixelTexture`)
+écrit `C255 = (1, -1)` dans ce cas, `(0, 1)` sinon ; `lyt.psh` calcule `v = C255.x + v * C255.y`.
