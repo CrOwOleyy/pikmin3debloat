@@ -413,6 +413,24 @@ texture n'envoie pas toujours `uTextureMode`. Détails : `shaders/lyt/README.md`
 
 ![Bulles du HUD](docs/hud_bulles.png)
 
+### Problèmes ouverts (retour de test du 2026-10-23)
+
+Relevés sur les captures en jeu (intro, zone enneigée, appel du communicateur) :
+1. **Modèle d'Alph déformé** (« on dirait un singe ») : visage et proportions faux, et il apparaît
+   parfois couché sur le côté. Pistes : skinning GPU (lecture des matrices d'os dans le bloc
+   uniforme, `spirv_vtx.cpp`), formats de sommets compressés, morphing du visage.
+2. **Visage toujours inversé** : à préciser (icône de la bulle du HUD ou visage du modèle 3D).
+3. **Boîtes de dialogue mal construites** : morceaux de cadre décalés, bandes cyan/noires
+   striées qui dépassent du cadre, fond trop transparent (programme 3, `lyt_frame.vsh`).
+4. **Artefacts en bas de l'écran** : blocs colorés (noir/blanc/magenta/cyan) sur les dernières
+   lignes, présents dans toutes les scènes, plus nombreux pendant l'appel du communicateur.
+5. **Texte qui clignote.**
+6. **Écran tactile sans effet** (« Toucher : bouger curseur ») : le toucher de la manette
+   (VPADRead, `tpData`) n'est pas encore relié à la souris.
+7. **Image délavée** (brouillard trop fort) et bandes cinéma du haut/bas grises et
+   transparentes au lieu de noires.
+8. **Lenteur** : environ 15 à 20 images/s.
+
 ### Shaders du décor (en cours)
 
 Arbres blancs et unis, sol noir. Diagnostic (outils ci-dessous) : les textures sont bonnes
