@@ -14,6 +14,7 @@
 #include <cafe/libraries/gx2/gx2.h>
 #include <cafe/libraries/gx2/gx2_shaders.h>
 #include <libgpu/latte/latte_disassembler.h>
+#include <chrono>
 #include <map>
 #include <mutex>
 #include <set>
@@ -484,7 +485,25 @@ bool guardSetColorBufferProbe(PPCContext& ctx)
     return false;
 }
 
+// Images par seconde côté jeu (appels à GX2SwapScanBuffers), journalisées toutes les 5 s.
+bool guardSwapScanBuffers(PPCContext&)
+{
+    static auto start = std::chrono::steady_clock::now();
+    static uint32_t frames = 0;
+    ++frames;
+    const auto now = std::chrono::steady_clock::now();
+    const double seconds = std::chrono::duration<double>(now - start).count();
+    if (seconds >= 5.0)
+    {
+        RT_INFO("%.1f images/s", frames / seconds);
+        frames = 0;
+        start = now;
+    }
+    return false;
+}
+
 const std::unordered_map<std::string, Guard> kGuards = {
+    { "GX2SwapScanBuffers", guardSwapScanBuffers },
     { "GX2SetColorBuffer", guardSetColorBufferProbe },
     { "GX2InitFetchShaderEx", guardInitFetchShader },
     { "GX2SetViewport", guardSetViewport },

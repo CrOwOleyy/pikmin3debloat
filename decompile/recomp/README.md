@@ -385,6 +385,22 @@ jeu dessine dans une cube map. Trois bugs de decaf trouvés (`patches/decaf-emu.
 
 ![Pikmin jaunes](docs/pikmin_jaunes.png)
 
+### Performances (2026-10-23)
+
+Mesure : le jeu journalise ses images/s toutes les 5 s ; `--profile <s>` échantillonne tous
+les threads (piles d'appels résolues avec le .pdb) pendant `<s>` secondes après 60 s de jeu.
+Constat : le thread de rendu du jeu attend surtout le GPU (`GX2DrawDone`), et le thread GPU de
+decaf passait son temps à :
+- **allouer de la mémoire Vulkan** : decaf crée un tampon par couple (adresse, taille) de
+  données (sommets, uniformes qui bougent à chaque image) et ne le libérait jamais ; VMA en
+  faisait des allocations dédiées, lentes. Les tampons de données inutilisés depuis 300 lots
+  sont maintenant libérés (`evictMemCaches`) et tous viennent d'un pool VMA à gros blocs ;
+- **hacher la mémoire invitée** pour détecter les écritures du CPU : la mémoire invitée est
+  réservée avec `MEM_WRITE_WATCH` et `gpu/cpu_shim.cpp` demande au système les pages écrites
+  pour les grandes plages (empreinte des données pour les petites).
+
+Résultat : environ 20 images/s en jeu (10 à 17, avec des chutes à 3, auparavant).
+
 ### Shaders du décor (en cours)
 
 Arbres blancs et unis, sol noir. Diagnostic (outils ci-dessous) : les textures sont bonnes

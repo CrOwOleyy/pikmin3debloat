@@ -28,6 +28,8 @@ extern bool g_splitView;
 extern bool g_probe;
 extern uint32_t g_autoA;
 extern uint32_t g_rdocCaptureAt;
+extern uint32_t g_profileSeconds;
+void profileStart();
 }
 
 namespace
@@ -186,6 +188,8 @@ int main(int argc, char** argv)
             g_splitView = true;
         else if (a == "--probe")
             g_probe = true;
+        else if (a == "--profile" && i + 1 < argc)
+            g_profileSeconds = uint32_t(atoi(argv[++i]));
         else if (a == "--rdoc-capture" && i + 1 < argc)
             g_rdocCaptureAt = uint32_t(atoi(argv[++i]));
         else if (a == "--auto-a" && i + 1 < argc)
@@ -220,6 +224,7 @@ int main(int argc, char** argv)
     hleInit();
     decafGx2Register();
     gpuStart();
+    profileStart();
 
     if (dumpAfter > 0)
         std::thread([dumpAfter] {

@@ -39,7 +39,9 @@ void memCommit(uint32_t addr, uint32_t size)
 
 void memInit()
 {
-    g_base = static_cast<uint8_t*>(VirtualAlloc(nullptr, 0x100000000ull, MEM_RESERVE, PAGE_NOACCESS));
+    // MEM_WRITE_WATCH : le GPU (cpu_shim.cpp) demande au système les pages écrites depuis sa
+    // dernière vérification au lieu de hacher les données.
+    g_base = static_cast<uint8_t*>(VirtualAlloc(nullptr, 0x100000000ull, MEM_RESERVE | MEM_WRITE_WATCH, PAGE_NOACCESS));
     if (!g_base)
         fatal("impossible de réserver 4 Gio d'espace d'adressage invité");
 
