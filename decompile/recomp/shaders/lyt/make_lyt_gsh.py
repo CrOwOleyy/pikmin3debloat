@@ -6,6 +6,7 @@ génériques (pilotés par les uniformes), on duplique donc la même paire 30 fo
 
 Usage : python make_lyt_gsh.py <latte_assembler.exe> <sortie.gsh>
 """
+import re
 import struct
 import subprocess
 import sys
@@ -60,6 +61,36 @@ def assemble(assembler, tmp, psh, vsh=HERE / "lyt.vsh"):
     return data[:struct.unpack_from(">I", data, 4)[0]], program, end[0]
 
 
+def fix_clauses(assembler, tmp, vsh, text):
+    """Assemble `text` (psh) en corrigeant ADDR/CNT des clauses d'après les erreurs de l'assembleur."""
+    psh = Path(tmp) / "fixed.psh"
+    # Renumérotation des groupes ALU et instructions TEX (des groupes ont pu être insérés)
+    n, out = 0, []
+    for line in text.split("\n"):
+        m = re.match(r"^\s+\d+(\s+(?:[xyzwt]:|SAMPLE).*)$", line)
+        if m:
+            line = f"  {n:2d}{m[1]}"
+            n += 1
+        out.append(line)
+    text = "\n".join(out)
+    for _ in range(60):
+        psh.write_text(text, encoding="utf-8")
+        r = subprocess.run([assembler, "assemble", f"--vsh={vsh}", f"--psh={psh}", str(Path(tmp) / "probe.gsh")],
+                           capture_output=True, text=True)
+        if r.returncode == 0:
+            return psh
+        m = re.search(r"(\d+):\d+ Incorrect clause (count|addr) \d+, expected (\d+)", r.stdout + r.stderr)
+        assert m, r.stdout + r.stderr
+        lines = text.split("\n")
+        for i in range(int(m[1]) - 1, -1, -1):
+            if re.match(r"\d\d (ALU|TEX):", lines[i]):
+                key = "CNT" if m[2] == "count" else "ADDR"
+                lines[i] = re.sub(key + r"\(\d+\)", f"{key}({m[3]})", lines[i])
+                break
+        text = "\n".join(lines)
+    raise RuntimeError("clauses non corrigées")
+
+
 def main():
     assembler, out = str(Path(sys.argv[1]).resolve()), Path(sys.argv[2])
     debug = "--debug-colors" in sys.argv  # chaque programme peint une couleur unique
@@ -69,6 +100,32 @@ def main():
         header, program, end = assemble(assembler, tmp, psh)
         frame = assemble(assembler, tmp, psh, HERE / "lyt_frame.vsh")[1]
         programs = [frame if i in FRAME_PROGRAMS else program for i in range(PROGRAM_COUNT)]
+        if psh == HERE / "lyt.psh":
+            # Programme = indice de base du matériau (0x0345F8F4) + 15 × variante (0x034614F0).
+            # Bases 0-2 (aucune ou une texture) : le jeu n'envoie uTextureMode que si le
+            # programme le demande, la valeur peut donc être celle d'un matériau précédent ; ces
+            # programmes ignorent le mode, et la base 1 (sans texture) prend une texture blanche.
+            # --tag-programs : constante inutilisée R20.w = 100 + numéro, pour reconnaître le
+            # programme d'un dessin dans RenderDoc.
+            source = psh.read_text(encoding="utf-8")
+            tag = "--tag-programs" in sys.argv
+            for i in range(PROGRAM_COUNT):
+                base = i % 15
+                if base > 2 and not tag:
+                    continue
+                text = source
+                if base <= 2:
+                    text = text.replace("z: SETGT_UINT R4.x, 0x10000, C0.x", "z: MOV R4.x, 0x0")
+                if base == 1:
+                    text = text.replace("SAMPLE          R9, R1.xy0x, t0, s0", "SAMPLE          R21, R1.xy0x, t0, s0")
+                    text = text.replace("z: MOV R20.z, 1.0f", "z: MOV R20.z, 1.0f\n   99  x: MOV R9.x, 1.0f\n"
+                                        "      y: MOV R9.y, 1.0f\n      z: MOV R9.z, 1.0f\n      w: MOV R9.w, 1.0f")
+                    text = text.replace("NUM_GPRS = 21", "NUM_GPRS = 22")
+                if tag:
+                    text = text.replace("z: MOV R20.z, 1.0f", f"z: MOV R20.z, 1.0f\n      w: MOV R20.w, {i + 100}.0f")
+                fixed = fix_clauses(assembler, tmp, HERE / "lyt.vsh", text)
+                vsh = HERE / ("lyt_frame.vsh" if i in FRAME_PROGRAMS else "lyt.vsh")
+                programs[i] = assemble(assembler, tmp, fixed, vsh)[1]
         if debug:
             programs = []
             for i in range(PROGRAM_COUNT):

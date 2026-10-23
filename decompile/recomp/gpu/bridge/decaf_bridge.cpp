@@ -308,6 +308,24 @@ bool guardSetVertexUniformReg(PPCContext& ctx)
 
 bool guardSetPixelUniformReg(PPCContext& ctx)
 {
+    // DECAF_PROBE_LYT : chaque envoi distinct de constantes de pixels par nw::lyt (0x0346xxxx) :
+    // uTextureMode (offset 0), uInterpolateWidth/Offset, uIndirectMtx0/1 (12, 16)…
+    static const bool probeLyt = getenv("DECAF_PROBE_LYT") != nullptr;
+    if (probeLyt && ctx.r5.u32 && (uint32_t(ctx.lr) >> 16) == 0x0346)
+    {
+        static std::mutex lock;
+        static std::set<std::string> seen;
+        char text[200];
+        int n = snprintf(text, sizeof(text), "offset=%u count=%u lr=0x%08X :", ctx.r3.u32, ctx.r4.u32, uint32_t(ctx.lr));
+        for (uint32_t i = 0; i < ctx.r4.u32 && i < 8; i++)
+        {
+            const uint32_t bits = rt::load32(ctx.r5.u32 + i * 4);
+            n += snprintf(text + n, sizeof(text) - n, " 0x%08X", bits);
+        }
+        std::lock_guard guard(lock);
+        if (seen.size() < 300 && seen.insert(text).second)
+            RT_INFO("SONDE lyt PS %s", text);
+    }
     if (rt::g_probe)
         probeUniforms("PS", ctx);
     return guardSetUniformReg(ctx);

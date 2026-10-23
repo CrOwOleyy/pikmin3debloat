@@ -119,10 +119,16 @@ static void **rdocApi()
 
 static void rdocCaptureLoop(uint32_t seconds)
 {
+   // DECAF_RDOC_EVERY=<s> : une capture de plus toutes les <s> secondes (8 au total)
+   const char *every = getenv("DECAF_RDOC_EVERY");
    std::this_thread::sleep_for(std::chrono::seconds(seconds));
-   if (auto api = rdocApi()) {
-      reinterpret_cast<void (*)()>(api[15])(); // TriggerCapture
-      RT_INFO("RenderDoc : capture demandée");
+   for (int i = 0; i < (every ? 8 : 1); i++) {
+      if (i)
+         std::this_thread::sleep_for(std::chrono::seconds(atoi(every)));
+      if (auto api = rdocApi()) {
+         reinterpret_cast<void (*)()>(api[15])(); // TriggerCapture
+         RT_INFO("RenderDoc : capture demandée");
+      }
    }
 }
 

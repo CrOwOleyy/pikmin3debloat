@@ -7,6 +7,9 @@
 ;   pos    = uProjection . vue                 (matrice 4x4, lignes)
 ;   couleur= bilinéaire(uVertexColor[0..3], i) * uColor
 ;   uv0    = bilinéaire(uVertexTexCoord0[0..3], i).xy, puis (u,v) = (uTexMtx0_xz, uTexMtx0_yw) . (s,t,0,1)
+;   uv1, uv2 : idem avec uVertexTexCoord1/2 et uTexMtx1/2
+;   uGeneratingTexCoord (C34, entier par jeu k) non nul : (s,t) = lignes 0-1 de uVertexTexCoordk . local
+;   (projection du pane : 1/largeur, 0,5…) au lieu des 4 coins
 ;
 ; Registres de constantes (vec4) : C0-3 uProjection, C4-6 uModelView, C7 uTransform,
 ; C8 uFrameSpec, C9-14 uTexMtx{0,1,2}_{xz,yw}, C15 uColor, C16-19 uVertexColor,
@@ -62,12 +65,14 @@
 ; $ATTRIB_VARS[0].NAME = "aVertexIndex"
 ; $ATTRIB_VARS[0].TYPE = "vec2"
 ; $ATTRIB_VARS[0].LOCATION = 0
-; $SQ_PGM_RESOURCES_VS.NUM_GPRS = 10
+; $SQ_PGM_RESOURCES_VS.NUM_GPRS = 12
 ; $SQ_PGM_RESOURCES_VS.STACK_SIZE = 1
-; $SPI_VS_OUT_CONFIG.VS_EXPORT_COUNT = 1
+; $SPI_VS_OUT_CONFIG.VS_EXPORT_COUNT = 3
 ; $NUM_SPI_VS_OUT_ID = 1
 ; $SPI_VS_OUT_ID[0].SEMANTIC_0 = 0
 ; $SPI_VS_OUT_ID[0].SEMANTIC_1 = 1
+; $SPI_VS_OUT_ID[0].SEMANTIC_2 = 2
+; $SPI_VS_OUT_ID[0].SEMANTIC_3 = 3
 ; $SQ_VTX_SEMANTIC_CLEAR = 0xFFFFFFFE
 ; $NUM_SQ_VTX_SEMANTIC = 1
 ; $SQ_VTX_SEMANTIC[0].SEMANTIC_ID = 0
@@ -75,7 +80,7 @@
 ; $VGT_HOS_REUSE_DEPTH.REUSE_DEPTH = 16
 
 00 CALL_FS NO_BARRIER
-01 ALU: ADDR(32) CNT(89)
+01 ALU: ADDR(32) CNT(99)
    0  x: MULADD          R2.x, R1.x, C7.x, C7.z
       y: MULADD          R2.y, -R1.y, C7.y, C7.w
       z: MOV             R2.z, 0.0f
@@ -151,17 +156,94 @@
       y: MULADD          R7.y, R8.y, R1.y, R7.y
       z: MOV             R7.z, 0.0f
       w: MOV             R7.w, 1.0f
-  20  x: DOT4            R9.x, R7.x, C9.x
+  20  x: DOT4            R8.x, R2.x, C22.x
+      y: DOT4            ____, R2.y, C22.y
+      z: DOT4            ____, R2.z, C22.z
+      w: DOT4            ____, R2.w, C22.w
+  21  x: DOT4            ____, R2.x, C23.x
+      y: DOT4            R8.y, R2.y, C23.y
+      z: DOT4            ____, R2.z, C23.z
+      w: DOT4            ____, R2.w, C23.w
+  22  x: CNDE_INT        R7.x, C34.x, R7.x, R8.x
+      y: CNDE_INT        R7.y, C34.x, R7.y, R8.y
+  23  x: DOT4            R9.x, R7.x, C9.x
       y: DOT4            ____, R7.y, C9.y
       z: DOT4            ____, R7.z, C9.z
       w: DOT4            ____, R7.w, C9.w
-  21  x: DOT4            ____, R7.x, C10.x
+  24  x: DOT4            ____, R7.x, C10.x
       y: DOT4            R9.y, R7.y, C10.y
       z: DOT4            ____, R7.z, C10.z
       w: DOT4            ____, R7.w, C10.w
-  22  z: MOV             R9.z, 0.0f
+  25  z: MOV             R9.z, 0.0f
       w: MOV             R9.w, 1.0f
-02 EXP_DONE: POS0, R4.xyzw
-03 EXP: PARAM0, R5.xyzw NO_BARRIER
-04 EXP_DONE: PARAM1, R9.xyzw NO_BARRIER
+02 ALU: ADDR(131) CNT(66)
+  26  x: ADD             R7.x, C27.x, -C26.x
+      y: ADD             R7.y, C27.y, -C26.y
+      z: ADD             R8.z, C29.x, -C28.x
+      w: ADD             R8.w, C29.y, -C28.y
+  27  x: MULADD          R7.x, R7.x, R1.x, C26.x
+      y: MULADD          R7.y, R7.y, R1.x, C26.y
+      z: MULADD          R8.z, R8.z, R1.x, C28.x
+      w: MULADD          R8.w, R8.w, R1.x, C28.y
+  28  x: ADD             R8.x, R8.z, -R7.x
+      y: ADD             R8.y, R8.w, -R7.y
+  29  x: MULADD          R7.x, R8.x, R1.y, R7.x
+      y: MULADD          R7.y, R8.y, R1.y, R7.y
+  30  x: DOT4            R8.x, R2.x, C26.x
+      y: DOT4            ____, R2.y, C26.y
+      z: DOT4            ____, R2.z, C26.z
+      w: DOT4            ____, R2.w, C26.w
+  31  x: DOT4            ____, R2.x, C27.x
+      y: DOT4            R8.y, R2.y, C27.y
+      z: DOT4            ____, R2.z, C27.z
+      w: DOT4            ____, R2.w, C27.w
+  32  x: CNDE_INT        R7.x, C34.y, R7.x, R8.x
+      y: CNDE_INT        R7.y, C34.y, R7.y, R8.y
+  33  x: DOT4            R10.x, R7.x, C11.x
+      y: DOT4            ____, R7.y, C11.y
+      z: DOT4            ____, R7.z, C11.z
+      w: DOT4            ____, R7.w, C11.w
+  34  x: DOT4            ____, R7.x, C12.x
+      y: DOT4            R10.y, R7.y, C12.y
+      z: DOT4            ____, R7.z, C12.z
+      w: DOT4            ____, R7.w, C12.w
+  35  z: MOV             R10.z, 0.0f
+      w: MOV             R10.w, 1.0f
+  36  x: ADD             R7.x, C31.x, -C30.x
+      y: ADD             R7.y, C31.y, -C30.y
+      z: ADD             R8.z, C33.x, -C32.x
+      w: ADD             R8.w, C33.y, -C32.y
+  37  x: MULADD          R7.x, R7.x, R1.x, C30.x
+      y: MULADD          R7.y, R7.y, R1.x, C30.y
+      z: MULADD          R8.z, R8.z, R1.x, C32.x
+      w: MULADD          R8.w, R8.w, R1.x, C32.y
+  38  x: ADD             R8.x, R8.z, -R7.x
+      y: ADD             R8.y, R8.w, -R7.y
+  39  x: MULADD          R7.x, R8.x, R1.y, R7.x
+      y: MULADD          R7.y, R8.y, R1.y, R7.y
+  40  x: DOT4            R8.x, R2.x, C30.x
+      y: DOT4            ____, R2.y, C30.y
+      z: DOT4            ____, R2.z, C30.z
+      w: DOT4            ____, R2.w, C30.w
+  41  x: DOT4            ____, R2.x, C31.x
+      y: DOT4            R8.y, R2.y, C31.y
+      z: DOT4            ____, R2.z, C31.z
+      w: DOT4            ____, R2.w, C31.w
+  42  x: CNDE_INT        R7.x, C34.z, R7.x, R8.x
+      y: CNDE_INT        R7.y, C34.z, R7.y, R8.y
+  43  x: DOT4            R11.x, R7.x, C13.x
+      y: DOT4            ____, R7.y, C13.y
+      z: DOT4            ____, R7.z, C13.z
+      w: DOT4            ____, R7.w, C13.w
+  44  x: DOT4            ____, R7.x, C14.x
+      y: DOT4            R11.y, R7.y, C14.y
+      z: DOT4            ____, R7.z, C14.z
+      w: DOT4            ____, R7.w, C14.w
+  45  z: MOV             R11.z, 0.0f
+      w: MOV             R11.w, 1.0f
+03 EXP_DONE: POS0, R4.xyzw
+04 EXP: PARAM0, R5.xyzw NO_BARRIER
+05 EXP: PARAM1, R9.xyzw NO_BARRIER
+06 EXP: PARAM2, R10.xyzw NO_BARRIER
+07 EXP_DONE: PARAM3, R11.xyzw NO_BARRIER
 END_OF_PROGRAM

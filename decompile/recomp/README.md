@@ -401,6 +401,18 @@ decaf passait son temps à :
 
 Résultat : environ 20 images/s en jeu (10 à 17, avec des chutes à 3, auparavant).
 
+### HUD : combineur de textures de nw::lyt (2026-10-23)
+
+Les bulles du HUD (visage du capitaine, bulle de vie à rayures) s'affichaient en carrés gris
+quadrillés. Le shader lyt de remplacement ne lisait que la texture 0 ; il combine maintenant
+jusqu'à 3 textures selon `uTextureMode` (Modulate, Add, Overlay…, et l'indirection qui décale
+les coordonnées : réfraction du décor dans les bulles), génère les coordonnées projetées
+(`uGeneratingTexCoord`) et tient compte du choix du programme par le jeu : un matériau à une
+texture n'envoie pas toujours `uTextureMode`. Détails : `shaders/lyt/README.md`.
+`DECAF_RDOC_EVERY=<s>` (avec `--rdoc-capture`) enchaîne 8 captures RenderDoc espacées de `<s>` s.
+
+![Bulles du HUD](docs/hud_bulles.png)
+
 ### Shaders du décor (en cours)
 
 Arbres blancs et unis, sol noir. Diagnostic (outils ci-dessous) : les textures sont bonnes
