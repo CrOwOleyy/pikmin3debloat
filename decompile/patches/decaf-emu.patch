@@ -362,6 +362,24 @@ index 71cd2f9..45b64b9 100644
     };
     std::vector<LoopState> mLoopStack;
  
+diff --git a/src/libgpu/src/vulkan/vulkan_descs.h b/src/libgpu/src/vulkan/vulkan_descs.h
+index 63fb1d6..f2f95cc 100644
+--- a/src/libgpu/src/vulkan/vulkan_descs.h
++++ b/src/libgpu/src/vulkan/vulkan_descs.h
+@@ -182,6 +182,13 @@ struct SurfaceDesc
+       case latte::SQ_TEX_DIM::DIM_2D_ARRAY_MSAA:
+       case latte::SQ_TEX_DIM::DIM_CUBEMAP:
+          _dataHash.height = height;
++         if (byCompat && tileMode >= latte::SQ_TILE_MODE::TILED_1D_THIN1 && height < 8) {
++            // recomp : une cible 1x1 est vue en 8x8 côté tampon de couleur (taille déduite des
++            // tuiles) et en 1x1 côté texture ; sans ce regroupement, la valeur repassait par la
++            // mémoire avec deux tuilages différents (visibilité du soleil, exposition : valeurs
++            // périmées relues, écran blanc).
++            _dataHash.height = 8;
++         }
+          // fallthrough
+       case latte::SQ_TEX_DIM::DIM_1D:
+       case latte::SQ_TEX_DIM::DIM_1D_ARRAY:
 diff --git a/src/libgpu/src/vulkan/vulkan_display.cpp b/src/libgpu/src/vulkan/vulkan_display.cpp
 index e96b29e..41fd55b 100644
 --- a/src/libgpu/src/vulkan/vulkan_display.cpp

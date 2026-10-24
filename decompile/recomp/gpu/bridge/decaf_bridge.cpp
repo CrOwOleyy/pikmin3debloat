@@ -355,6 +355,23 @@ bool guardSetViewport(PPCContext& ctx)
     return false;
 }
 
+// --probe : couleurs d'effacement distinctes (f1-f4) par format de cible.
+bool guardClearColorProbe(PPCContext& ctx)
+{
+    static std::mutex lock;
+    static std::set<std::string> seen;
+    if (!rt::g_probe || !ctx.r3.u32)
+        return false;
+    char text[200];
+    snprintf(text, sizeof(text), "%ux%u format=0x%X : %g %g %g %g (ps1 %g %g) lr=0x%08X", rt::load32(ctx.r3.u32 + 4),
+        rt::load32(ctx.r3.u32 + 8), rt::load32(ctx.r3.u32 + 0x14), ctx.f1.f64, ctx.f2.f64, ctx.f3.f64, ctx.f4.f64,
+        ctx.ps1[1].f64, ctx.ps1[2].f64, uint32_t(ctx.lr));
+    std::lock_guard guard(lock);
+    if (seen.size() < 200 && seen.insert(text).second)
+        RT_INFO("SONDE GX2ClearColor %s", text);
+    return false;
+}
+
 // --probe : formats d'attributs de sommets distincts (GX2AttribStream, 0x20 octets :
 // location, buffer, offset, format, type, aluDivisor, mask, endianSwap).
 bool guardInitFetchShader(PPCContext& ctx)
@@ -482,6 +499,7 @@ const std::unordered_map<std::string, Guard> kGuards = {
     { "GX2SetColorBuffer", guardSetColorBufferProbe },
     { "GX2InitFetchShaderEx", guardInitFetchShader },
     { "GX2SetViewport", guardSetViewport },
+    { "GX2ClearColor", guardClearColorProbe },
     { "GX2SetShaders", guardSetShaders },
     { "GX2SetVertexUniformReg", guardSetVertexUniformReg },
     { "GX2SetPixelUniformReg", guardSetPixelUniformReg },
