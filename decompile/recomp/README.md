@@ -424,6 +424,13 @@ Relevés sur les captures en jeu (intro, zone enneigée, appel du communicateur)
    striées qui dépassent du cadre, fond trop transparent (programme 3, `lyt_frame.vsh`).
 4. **Artefacts en bas de l'écran** : blocs colorés (noir/blanc/magenta/cyan) sur les dernières
    lignes, présents dans toutes les scènes, plus nombreux pendant l'appel du communicateur.
+   Piste (2026-10-24) : ils naissent dans les tampons demi-résolution 640×368 (vue 640×360) aux
+   lignes 352 à 367, la dernière rangée de macro-tuiles (hauteur alignée sur 16), puis la
+   composition à pleine résolution les pose sur la bande 704-719. RenderDoc se contredit sur
+   ces lignes (historique de pixel noir, image enregistrée abîmée) : contenu Vulkan indéfini.
+   Écartés : particules (`DECAF_SKIP_PS=<nom du dump>` saute un shader), tampons
+   intermédiaires du tuilage, regroupement des surfaces 360/368. Corrigés en chemin dans decaf :
+   images neuves mises à zéro, barrières manquantes sur les tampons de (dé)tuilage.
 5. **Texte qui clignote.**
 6. **Écran tactile sans effet** (« Toucher : bouger curseur ») : le toucher de la manette
    (VPADRead, `tpData`) n'est pas encore relié à la souris.

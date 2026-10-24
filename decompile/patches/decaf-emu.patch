@@ -401,7 +401,7 @@ index e96b29e..41fd55b 100644
     // Allocate buffer
     auto bufferDesc = vk::BufferCreateInfo { };
 diff --git a/src/libgpu/src/vulkan/vulkan_draw.cpp b/src/libgpu/src/vulkan/vulkan_draw.cpp
-index a800272..92eb89f 100644
+index a800272..13ad72c 100644
 --- a/src/libgpu/src/vulkan/vulkan_draw.cpp
 +++ b/src/libgpu/src/vulkan/vulkan_draw.cpp
 @@ -305,6 +305,22 @@ Driver::drawGenericIndexed(latte::VGT_DRAW_INITIATOR drawInit, uint32_t numIndic
@@ -427,7 +427,20 @@ index a800272..92eb89f 100644
     // Set up all the required state, ordering here is very important
     if (!checkCurrentVertexShader()) {
        gLog->debug("Skipped draw due to a vertex shader error");
-@@ -363,6 +379,12 @@ Driver::drawGenericIndexed(latte::VGT_DRAW_INITIATOR drawInit, uint32_t numIndic
+@@ -318,6 +334,12 @@ Driver::drawGenericIndexed(latte::VGT_DRAW_INITIATOR drawInit, uint32_t numIndic
+       gLog->debug("Skipped draw due to a pixel shader error");
+       return;
+    }
++   // recomp, diagnostic : DECAF_SKIP_PS=<nom du dump, ex. ffd02400> saute les dessins de ce shader.
++   static const uint32_t skipPs = getenv("DECAF_SKIP_PS") ? static_cast<uint32_t>(strtoul(getenv("DECAF_SKIP_PS"), nullptr, 16)) : 0;
++   if (skipPs && mCurrentDraw->pixelShader &&
++       static_cast<uint32_t>(reinterpret_cast<uintptr_t>((*mCurrentDraw->pixelShader->desc).binary.data())) == skipPs) {
++      return;
++   }
+    if (!checkCurrentRectStubShader()) {
+       gLog->debug("Skipped draw due to a rect stub shader error");
+       return;
+@@ -363,6 +385,12 @@ Driver::drawGenericIndexed(latte::VGT_DRAW_INITIATOR drawInit, uint32_t numIndic
        return;
     }
  
@@ -440,7 +453,7 @@ index a800272..92eb89f 100644
     // These things need to happen up here before we enter the render pass, otherwise
     // the pipeline barrier triggered by the memory cache transition will fail.
     uint32_t opaqueStride = 0;
-@@ -402,6 +424,7 @@ Driver::drawGenericIndexed(latte::VGT_DRAW_INITIATOR drawInit, uint32_t numIndic
+@@ -402,6 +430,7 @@ Driver::drawGenericIndexed(latte::VGT_DRAW_INITIATOR drawInit, uint32_t numIndic
     // this order, since this draw might use the last renderpasses framebuffer as a texture, and we
     // need to barrier AFTER the previous draws are flushed.
     mCurrentDraw = &drawDesc;
@@ -792,7 +805,7 @@ index 7d76227..9bb49c6 100644
        decaf_abort("Unexpected pipeline cull mode");
     }
 diff --git a/src/libgpu/src/vulkan/vulkan_surface.cpp b/src/libgpu/src/vulkan/vulkan_surface.cpp
-index c1da79e..f061ecb 100644
+index c1da79e..bb95a58 100644
 --- a/src/libgpu/src/vulkan/vulkan_surface.cpp
 +++ b/src/libgpu/src/vulkan/vulkan_surface.cpp
 @@ -1,5 +1,7 @@
@@ -840,7 +853,73 @@ index c1da79e..f061ecb 100644
     // Grab a reference to the memory cache that backs this surface
     auto memCache = _getSurfaceMemCache(info, tilingInfo);
  
-@@ -772,9 +786,18 @@ Driver::_refreshSurface(SurfaceObject *surface, SurfaceSubRange range)
+@@ -533,6 +547,20 @@ Driver::_allocateSurface(const SurfaceDesc& info)
+    surface->lastUsageIndex = mActiveBatchIndex;
+    surface->group = surfaceGroup;
+ 
++   // recomp : une image Vulkan neuve a un contenu indéfini ; les copies entre surfaces de tailles
++   // différentes (_copySurface, _upgradeSurface) n'en remplissent qu'une partie, et le reste
++   // apparaissait à l'écran (blocs colorés en bas de l'image). On la met à zéro.
++   if (usageFlags & vk::ImageUsageFlagBits::eColorAttachment) {
++      _barrierSurface(surface, ResourceUsage::TransferDst, vk::ImageLayout::eTransferDstOptimal, {});
++      mActiveCommandBuffer.clearColorImage(image, vk::ImageLayout::eTransferDstOptimal,
++                                           vk::ClearColorValue { std::array<float, 4> { 0.0f, 0.0f, 0.0f, 0.0f } },
++                                           { subresRange });
++   } else if (usageFlags & vk::ImageUsageFlagBits::eDepthStencilAttachment) {
++      _barrierSurface(surface, ResourceUsage::TransferDst, vk::ImageLayout::eTransferDstOptimal, {});
++      mActiveCommandBuffer.clearDepthStencilImage(image, vk::ImageLayout::eTransferDstOptimal,
++                                                  vk::ClearDepthStencilValue { 1.0f, 0 }, { subresRange });
++   }
++
+    _addSurfaceGroupSurface(surfaceGroup, surface);
+ 
+    return surface;
+@@ -623,6 +651,10 @@ Driver::_readSurfaceData(SurfaceObject *surface, SurfaceSubRange range)
+       untiledBuffer = retileStaging->buffer;
+ 
+       _barrierMemCache(surface->memCache, ResourceUsage::ComputeSsboRead, sectionRange);
++      // recomp : le tampon intermédiaire a aussi besoin de ses barrières (écrit par le calcul,
++      // lu par la copie). Sans elles, la copie pouvait lire les dernières tuiles avant leur
++      // détuilage : blocs aléatoires dans le bas des images relues depuis la mémoire.
++      transitionStagingBuffer(retileStaging, ResourceUsage::ComputeSsboWrite);
+ 
+       dispatchGpuUntile(retileInfo,
+                         mActiveCommandBuffer,
+@@ -631,6 +663,7 @@ Driver::_readSurfaceData(SurfaceObject *surface, SurfaceSubRange range)
+                         range.firstSlice, range.numSlices);
+ 
+       _barrierMemCache(surface->memCache, ResourceUsage::TransferSrc, sectionRange);
++      transitionStagingBuffer(retileStaging, ResourceUsage::TransferSrc);
+    } else {
+       // We will directly read from the memory cache, since this is a linear surface
+       _barrierMemCache(surface->memCache, ResourceUsage::TransferSrc, sectionRange);
+@@ -683,6 +716,7 @@ Driver::_writeSurfaceData(SurfaceObject *surface, SurfaceSubRange range)
+    auto untiledBuffer = memCache->buffer;
+ 
+    auto retileInfo = gpu7::tiling::computeRetileInfo(surface->tilingInfo);
++   StagingBuffer *retileStaging = nullptr;
+    if (retileInfo.isTiled) {
+       // Calculate the retiling buffer size
+       auto retileSize = retileInfo.thinSliceBytes * range.numSlices;
+@@ -694,7 +728,8 @@ Driver::_writeSurfaceData(SurfaceObject *surface, SurfaceSubRange range)
+       //retileSize /= retileInfo.microTileThickness;
+ 
+       // Grab our buffer used for retiling
+-      auto retileStaging = getStagingBuffer(retileSize, StagingBufferType::GpuToGpu);
++      retileStaging = getStagingBuffer(retileSize, StagingBufferType::GpuToGpu);
++      transitionStagingBuffer(retileStaging, ResourceUsage::TransferDst);
+ 
+       untiledOffset = 0;
+       untiledBuffer = retileStaging->buffer;
+@@ -738,6 +773,7 @@ Driver::_writeSurfaceData(SurfaceObject *surface, SurfaceSubRange range)
+ 
+    if (retileInfo.isTiled) {
+       _barrierMemCache(surface->memCache, ResourceUsage::ComputeSsboWrite, sectionRange);
++      transitionStagingBuffer(retileStaging, ResourceUsage::ComputeSsboRead);
+ 
+       auto tiledBuffer = memCache->buffer;
+       auto tiledOffset = range.firstSlice * retileInfo.thinSliceBytes;
+@@ -772,9 +808,18 @@ Driver::_refreshSurface(SurfaceObject *surface, SurfaceSubRange range)
        _copySurface(surface, object, { start, count });
     });
  
@@ -859,7 +938,7 @@ index c1da79e..f061ecb 100644
        if (surface->slices[i].lastChangeIndex >= latestChangeIndex) {
           continue;
        }
-@@ -814,6 +837,12 @@ Driver::_invalidateSurface(SurfaceObject *surface, SurfaceSubRange range)
+@@ -814,6 +859,12 @@ Driver::_invalidateSurface(SurfaceObject *surface, SurfaceSubRange range)
        _barrierSurface(surface, oldUsage, oldLayout, range);
     });
  
