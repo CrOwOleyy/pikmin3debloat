@@ -419,7 +419,9 @@ Relevés sur les captures en jeu (intro, zone enneigée, appel du communicateur)
 1. **Modèle de Charlie / des Pikmin déformé** (« on dirait un singe ») : pas reproduit sur mes
    captures (Charlie couché au début = animation de réveil de l'intro). Pistes : skinning GPU
    (`spirv_vtx.cpp`), formats de sommets compressés, morphing du visage.
-2. ~~Visage du HUD à l'envers~~ : corrigé (V retourné pour toutes les textures nw::lyt) ; les
+2. **Visage du HUD trop transparent** : le pane du visage est dessiné avec `uColor.a` = 64/255
+   (opacité 0,25, valeur envoyée par le jeu) ; à vérifier côté CPU (alpha hérité des panes
+   parents, animation). ~~Visage du HUD à l'envers~~ : corrigé (V retourné pour toutes les textures nw::lyt) ; les
    portraits du communicateur (hexagones, au lieu de « X ») aussi.
 3. ~~Boîtes de dialogue mal construites~~ : corrigé (coordonnées de cadre `uFrameSpec` bornées
    par pixel pour tous les programmes, Replace de l'étage 0 = capture du fond ;
