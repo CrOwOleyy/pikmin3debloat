@@ -424,19 +424,14 @@ Relevés sur les captures en jeu (intro, zone enneigée, appel du communicateur)
 3. ~~Boîtes de dialogue mal construites~~ : corrigé (coordonnées de cadre `uFrameSpec` bornées
    par pixel pour tous les programmes, Replace de l'étage 0 = capture du fond ;
    `shaders/lyt/README.md`). Reste : texte du premier dialogue gris clair au lieu de cyan.
-4. **Artefacts en bas de l'écran** : blocs colorés (noir/blanc/magenta/cyan) sur les lignes
-   704-719, surtout pendant les cinématiques (presque plus en jeu). Ce sont des valeurs HDR
-   aberrantes : elles faussent aussi l'histogramme de luminance (case la plus claire pleine,
-   adaptation d'exposition à 12 828 au lieu de ~1), d'où les **écrans blancs** une image sur deux
-   ou trois pendant certaines cinématiques (voir `DECAF_RDOC_FRAMES`). Elles naissent dans les
-   tampons demi-résolution 640×368 (vue 640×360), lignes 352 à 367 ; RenderDoc se contredit
-   sur ces lignes (contenu Vulkan indéfini). Écartés : particules (`DECAF_SKIP_PS`), bokeh
-   (`DECAF_SKIP_TEXSIZE=192x32`), tampons intermédiaires, taille du tuilage (vérifiée avec
-   addrlib). Corrigés en chemin dans decaf : images neuves mises à zéro, barrières des tampons
-   de (dé)tuilage, surfaces regroupées sur leur hauteur alignée (16 lignes en 2D, 8 en 1D :
-   cible 8×8 / texture 1×1 de la visibilité du soleil, cible 704×240 / texture 684×234 du
-   texte des dialogues).
-5. **Texte qui clignote** - piste (2026-10-24) : sur 6 images consécutives réellement
+4. ~~Artefacts en bas de l'écran et écrans blancs~~ : corrigés (2026-10-24). decaf ne posait pas
+   de barrière entre deux écritures de transfert successives sur la même image ou la même
+   mémoire (rechargement depuis la mémoire puis effacement, deux copies…) : le GPU pouvait les
+   réordonner, et des valeurs périmées revenaient selon le minutage (d'où l'absence de défaut
+   dans les rejeux RenderDoc). La cible de visibilité du soleil accumulait ainsi des valeurs
+   absurdes (disque blanc géant, exposition faussée), et les tampons demi-résolution gardaient
+   des blocs aux lignes 352-367. Barrière désormais posée (`_barrierSurface`, `_barrierMemCache`).
+5. **Texte qui clignote** - probablement le disque blanc intermittent (4), à revérifier ; piste initiale (2026-10-24) : sur 6 images consécutives réellement
    affichées (`DECAF_RDOC_FRAMES=6`, image du dessin vers la swapchain), la caméra alterne entre
    deux cadrages une image sur deux. Ce n'est pas le GamePad (copies TV/DRC séparées par la
    bibliothèque GX2 de decaf). Hypothèse : données doublement tamponnées par le jeu (caméra,

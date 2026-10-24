@@ -549,7 +549,7 @@ index c87d31f..a5c9ff5 100644
     gpu7::tiling::vulkan::Retiler mGpuRetiler;
     DriverMemoryTracker mMemTracker;
 diff --git a/src/libgpu/src/vulkan/vulkan_memcache.cpp b/src/libgpu/src/vulkan/vulkan_memcache.cpp
-index 49ac6e6..55f2fe8 100644
+index 49ac6e6..df958ee 100644
 --- a/src/libgpu/src/vulkan/vulkan_memcache.cpp
 +++ b/src/libgpu/src/vulkan/vulkan_memcache.cpp
 @@ -1,5 +1,7 @@
@@ -612,7 +612,18 @@ index 49ac6e6..55f2fe8 100644
     });
  
     if (delayedWriteFunc) {
-@@ -529,9 +555,111 @@ DataBufferObject *
+@@ -375,7 +401,9 @@ Driver::_barrierMemCache(MemCacheObject *cache, ResourceUsage usage, SectionRang
+    auto offsetStart = range.start * cache->sectionSize;;
+    auto memSize = range.count * cache->sectionSize;
+ 
+-   if (cache->activeUsage == usage) {
++   // recomp : écritures de transfert/calcul successives sur la même mémoire : barrière aussi.
++   if (cache->activeUsage == usage && usage != ResourceUsage::TransferDst &&
++       usage != ResourceUsage::ComputeSsboWrite) {
+       return;
+    }
+ 
+@@ -529,9 +557,111 @@ DataBufferObject *
  Driver::getDataMemCache(phys_addr baseAddress, uint32_t size)
  {
     auto cache = getMemCache(baseAddress, 1, size);
@@ -837,7 +848,7 @@ index 7d76227..9bb49c6 100644
        decaf_abort("Unexpected pipeline cull mode");
     }
 diff --git a/src/libgpu/src/vulkan/vulkan_surface.cpp b/src/libgpu/src/vulkan/vulkan_surface.cpp
-index c1da79e..bb95a58 100644
+index c1da79e..1938b0d 100644
 --- a/src/libgpu/src/vulkan/vulkan_surface.cpp
 +++ b/src/libgpu/src/vulkan/vulkan_surface.cpp
 @@ -1,5 +1,7 @@
@@ -983,6 +994,19 @@ index c1da79e..bb95a58 100644
     // Update our last change index to match the data we wrote
     auto sectionRange = _sliceRangeToSectionRange(range);
     for (auto i = sectionRange.start; i < sectionRange.start + sectionRange.count; ++i) {
+@@ -834,7 +885,11 @@ Driver::_barrierSurface(SurfaceObject *surface, ResourceUsage usage, vk::ImageLa
+    // actually needs to be for this transition.
+    decaf_check(dstMeta.imageLayout == layout);
+ 
+-   if (surface->activeUsage == usage) {
++   // recomp : deux écritures successives du même type (rechargement depuis la mémoire puis
++   // effacement, deux copies…) ont aussi besoin d'une barrière, sinon le GPU peut les réordonner
++   // (la cible de visibilité du soleil gardait parfois ses anciennes valeurs : disque blanc
++   // intermittent).
++   if (surface->activeUsage == usage && usage != ResourceUsage::TransferDst) {
+       return;
+    }
+ 
 diff --git a/src/libgpu/src/vulkan/vulkan_textures.cpp b/src/libgpu/src/vulkan/vulkan_textures.cpp
 index f8f0a16..60ea87d 100644
 --- a/src/libgpu/src/vulkan/vulkan_textures.cpp
