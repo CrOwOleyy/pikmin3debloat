@@ -43,7 +43,9 @@ void setSdaBases(uint32_t sda, uint32_t sda2)
 uint64_t systemTicks()
 {
     auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - s_bootClock).count();
-    return uint64_t(ns) * kTimerSpeed / 1000000000ull;
+    // Secondes et reste séparés : ns × 62 156 250 dépasserait 64 bits après 297 s de jeu
+    // (le temps du jeu serait reparti en arrière).
+    return uint64_t(ns) / 1000000000ull * kTimerSpeed + uint64_t(ns) % 1000000000ull * kTimerSpeed / 1000000000ull;
 }
 
 uint64_t timeTicks()
@@ -59,7 +61,7 @@ uint64_t timeTicks()
 
 static std::chrono::nanoseconds ticksToDuration(uint64_t ticks)
 {
-    return std::chrono::nanoseconds(ticks * 1000000000ull / kTimerSpeed);
+    return std::chrono::nanoseconds(ticks / kTimerSpeed * 1000000000ull + ticks % kTimerSpeed * 1000000000ull / kTimerSpeed);
 }
 
 static PPCContext* newContext()

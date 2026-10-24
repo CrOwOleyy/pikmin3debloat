@@ -16,6 +16,7 @@
 #include <libgpu/latte/latte_disassembler.h>
 #include <chrono>
 #include <map>
+#include <cmath>
 #include <mutex>
 #include <set>
 #include <libcpu/cpu_control.h>
@@ -440,6 +441,28 @@ bool guardSetVertexUniformBlockProbe(PPCContext& ctx)
 {
     if (guardSetVertexUniformBlock(ctx))
         return true;
+    // DECAF_WATCH_BONES=1 : palette d'os de Charlie en jeu (512 octets, matrices 3x4 petit-boutistes
+    // d'échelle 1,5) ; journalise l'inclinaison de l'os racine (angle entre son axe Y et la
+    // verticale) toutes les 250 ms.
+    static const bool watchBones = getenv("DECAF_WATCH_BONES") != nullptr;
+    if (watchBones && ctx.r4.u32 == 512 && ctx.r5.u32)
+    {
+        float m[24];
+        memcpy(m, rt::g_base + ctx.r5.u32, sizeof(m));
+        const float sx = std::sqrt(m[0] * m[0] + m[4] * m[4] + m[8] * m[8]);
+        const float sy = std::sqrt(m[1] * m[1] + m[5] * m[5] + m[9] * m[9]);
+        static auto last = std::chrono::steady_clock::now();
+        const auto now = std::chrono::steady_clock::now();
+        if (std::fabs(sx - 1.5f) < 0.01f && std::fabs(sy - 1.5f) < 0.05f && std::fabs(m[3]) > 100.0f &&
+            now - last > std::chrono::milliseconds(250))
+        {
+            last = now;
+            const float tilt = std::acos(std::fmin(1.0f, std::fabs(m[5]) / sy)) * 57.29578f;
+            const float sy1 = std::sqrt(m[13] * m[13] + m[17] * m[17] + m[21] * m[21]);
+            RT_INFO("OS racine : incl. %5.1f, pos %.1f %.1f %.1f, axeY %.3f %.3f %.3f | os1 axeY %.3f %.3f %.3f (éch. %.3f)",
+                tilt, m[3], m[7], m[11], m[1] / sy, m[5] / sy, m[9] / sy, m[13] / sy1, m[17] / sy1, m[21] / sy1, sy1);
+        }
+    }
     if (!rt::g_probe || ctx.r3.u32 != 2 || !ctx.r5.u32 || ctx.r4.u32 < 80)
         return false;
     static std::mutex lock;
