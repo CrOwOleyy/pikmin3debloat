@@ -436,7 +436,12 @@ Relevés sur les captures en jeu (intro, zone enneigée, appel du communicateur)
    de (dé)tuilage, surfaces regroupées sur leur hauteur alignée (16 lignes en 2D, 8 en 1D :
    cible 8×8 / texture 1×1 de la visibilité du soleil, cible 704×240 / texture 684×234 du
    texte des dialogues).
-5. **Texte qui clignote** : confirmé sur images consécutives (texte absent sur certaines) ;
+5. **Texte qui clignote** - piste (2026-10-24) : sur 6 images consécutives réellement
+   affichées (`DECAF_RDOC_FRAMES=6`, image du dessin vers la swapchain), la caméra alterne entre
+   deux cadrages une image sur deux. Ce n'est pas le GamePad (copies TV/DRC séparées par la
+   bibliothèque GX2 de decaf). Hypothèse : données doublement tamponnées par le jeu (caméra,
+   état des dialogues) dont une moitié serait périmée côté GPU - à tester en désactivant le
+   suivi d'écritures write-watch (`gpu/cpu_shim.cpp`, `runtime/memory.cpp`). Ancienne note : confirmé sur images consécutives (texte absent sur certaines) ;
    le regroupement des surfaces ci-dessus vise ce cas, à revérifier.
 6. **Écran tactile sans effet** (« Toucher : bouger curseur ») : le toucher de la manette
    (VPADRead, `tpData`) n'est pas encore relié à la souris.
