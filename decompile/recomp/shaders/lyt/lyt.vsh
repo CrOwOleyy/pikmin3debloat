@@ -10,8 +10,9 @@
 ;   uv1, uv2 : idem avec uVertexTexCoord1/2 et uTexMtx1/2
 ;   uGeneratingTexCoord (C34, entier par jeu k) non nul : (s,t) = lignes 0-1 de uVertexTexCoordk . local
 ;   morceau de cadre de fenêtre (octet bas de uFrameSpec, C8, non nul) : uv0 = (i ou 1-i, miroirs
-;   bits 17/18) * taille du morceau (uTransform.xy) * uRcpTexSize0, borné à 0,99 (coin à sa
-;   taille, bord étiré au-delà), v retourné pour compenser le retournement de lyt.psh
+;   bits 17/18) * taille du morceau (uTransform.xy) * uRcpTexSize0, v retourné pour compenser le
+;   retournement de lyt.psh ; uv0.z = 1 demande à lyt.psh de borner uv0 à 0,99 par pixel (coin à
+;   sa taille, bord étiré au-delà : borner aux sommets étirait le dégradé du coin en biais)
 ;   (projection du pane : 1/largeur, 0,5…) au lieu des 4 coins
 ;
 ; Registres de constantes (vec4) : C0-3 uProjection, C4-6 uModelView, C7 uTransform,
@@ -179,7 +180,7 @@
       w: DOT4            ____, R7.w, C10.w
   25  z: MOV             R9.z, 0.0f
       w: MOV             R9.w, 1.0f
-02 ALU: ADDR(131) CNT(87)
+02 ALU: ADDR(131) CNT(86)
   26  x: ADD             R7.x, C27.x, -C26.x
       y: ADD             R7.y, C27.y, -C26.y
       z: ADD             R8.z, C29.x, -C28.x
@@ -255,11 +256,10 @@
       y: MUL             R8.y, R8.y, C7.y
   49  x: MUL             R8.x, R8.x, C35.x
       y: MUL             R8.y, R8.y, C35.y
-  50  x: MIN             R8.x, R8.x, (0x3F7D70A4, 0.99)
-      y: MIN             R8.y, R8.y, (0x3F7D70A4, 0.99)
-  51  y: ADD             R8.y, -R8.y, 1.0f
-  52  x: CNDE_INT        R9.x, R8.z, R9.x, R8.x
+  50  y: ADD             R8.y, -R8.y, 1.0f
+  51  x: CNDE_INT        R9.x, R8.z, R9.x, R8.x
       y: CNDE_INT        R9.y, R8.z, R9.y, R8.y
+      z: CNDE_INT        R9.z, R8.z, 0.0f, 1.0f
 03 EXP_DONE: POS0, R4.xyzw
 04 EXP: PARAM0, R5.xyzw NO_BARRIER
 05 EXP: PARAM1, R9.xyzw NO_BARRIER

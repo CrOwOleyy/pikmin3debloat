@@ -61,7 +61,7 @@ précédent - d'où la spécialisation des programmes 0 à 2 (sans elle, le visa
 HUD disparaissait sous le masque de la lentille dessinée juste avant).
 
 Combineur (`lyt.psh`) : l'étage k combine le résultat P à la texture k+1 :
-2 = P inchangé, 3 = P × T, 4 = P + T, 5 = P − T, 6 = P + T − 0,5, 9 = Overlay ; bit 0x80 :
+2 = Replace (étage 0 : P = T, par exemple la capture floue du fond derrière une fenêtre ; étage 1 : P inchangé, sinon le texte des dialogues perd sa couleur), 3 = P × T, 4 = P + T, 5 = P − T, 6 = P + T − 0,5, 9 = Overlay ; bit 0x80 :
 alpha × alpha de T. 0xE–0x10 (Indirect) : (r, g, b, 1) de T · `uIndirectMtx0`/`uIndirectMtx1`
 (C3, C4 ; par exemple (2, 0, 0, −1) et (0, −2, 0, 1)) décale uv0 avant la lecture de la
 texture 0 - les bulles du HUD réfractent ainsi le décor flou capturé derrière elles. Dodge (7)
@@ -92,5 +92,6 @@ utilisent des programmes à 3 textures (halo, voile, lignes). `uFrameSpec` (C8, 
 bits 8-11 = morceau (8 à B, D = contenu), bit 17 = miroir horizontal, bit 18 = vertical, octet
 bas non nul pour un morceau de cadre. Dans ce cas `lyt.vsh` remplace uv0 par
 (i ou 1-i) × taille du morceau × `uRcpTexSize0`, borné à 0,99 : le coin garde sa taille et son
-bord est étiré sur le reste du morceau. Auparavant ces morceaux étiraient tout le coin (bandes
+bord est étiré sur le reste du morceau. Le bornage se fait par pixel dans `lyt.psh` (uv0.z = 1) :
+borné aux sommets, le dégradé du coin était étiré en biais sur toute la longueur. Auparavant ces morceaux étiraient tout le coin (bandes
 grises, cadre décalé, bande noire en bas des dialogues).

@@ -37,6 +37,9 @@ alu(
  # (l'unité ALU suit le canal écrit : deux .y au plus par groupe, le second en transcendant)
  ["y: ADD R1.y, -R1.y, 1.0f", "t: ADD R2.y, -R2.y, 1.0f"],
  ["y: ADD R3.y, -R3.y, 1.0f"],
+ # morceau de cadre (uv0.z = 1, lyt.vsh) : uv0 borné à 0,99 par pixel
+ ["x: MIN R13.x, R1.x, (0x3F7D70A4, 0.99)", "y: MIN R13.y, R1.y, (0x3F7D70A4, 0.99)"],
+ ["x: CNDE R1.x, R1.z, R1.x, R13.x", "y: CNDE R1.y, R1.z, R1.y, R13.y"],
 )
 tex("SAMPLE          R6, R2.xy0x, t1, s1", "SAMPLE          R7, R3.xy0x, t2, s2")
 # --- B : indirection (étage 0 : texture 1, étage 1 : texture 2), décalage de uv0 ---
@@ -50,12 +53,12 @@ alu(
 )
 tex("SAMPLE          R9, R1.xy0x, t0, s0")
 # --- C : combinaison, étage 0 (R6, code R4.y, alpha R12.x) puis étage 1 (R7, R4.z, R12.y) ---
-def stage(T, m, af):
+def stage(T, m, af, replace=False):
     gs = []
     gs.append(["x: SETE_INT R10.x, %s, 0x3" % m, "y: SETE_INT R10.y, %s, 0x4" % m, "z: SETE_INT R10.z, %s, 0x5" % m, "w: SETE_INT R10.w, %s, 0x6" % m])
     gs.append(vec("MUL", "R13", "R9", T) + ["w: MUL R13.w, R9.w, %s.w" % T])     # Modulate
     gs.append(vec("ADD", "R14", "R9", T) + ["w: SETE_INT R11.x, %s, 0x9" % m])  # Add
-    gs.append(vec("ADD", "R15", "R9", "-" + T))                                 # Subtract
+    gs.append(vec("ADD", "R15", "R9", "-" + T) + (["w: SETE_INT R11.y, %s, 0x2" % m] if replace else []))  # Subtract
     gs.append(vec("ADD", "R16", "R14", "-R20.x"))                               # AddSigned
     gs.append(vec("ADD", "R17", "R14", "-R13"))                                 # Overlay : 2(P+T-PT)-1 si P>=0,5
     gs.append(vec("MULADD", "R17", "R17", "R20.y", "-R20.z"))
@@ -67,8 +70,10 @@ def stage(T, m, af):
     gs.append(vec("CNDE_INT", "R9", "R10.z", "R9", "R15"))
     gs.append(vec("CNDE_INT", "R9", "R10.w", "R9", "R16"))
     gs.append(vec("CNDE_INT", "R9", "R11.x", "R9", "R17"))
+    if replace:  # étage 0, Replace : la texture remplace le résultat (capture du fond des fenêtres)
+        gs.append(vec("CNDE_INT", "R9", "R11.y", "R9", T))
     return gs
-alu(*stage("R6", "R4.y", "R12.x"))
+alu(*stage("R6", "R4.y", "R12.x", replace=True))
 alu(*stage("R7", "R4.z", "R12.y"),
  vec("MULADD", "R9", "R9", "C1", "C2", chans="xyzw"),
  vec("MUL", "R0", "R0", "R9", chans="xyzw"))

@@ -421,10 +421,9 @@ Relevés sur les captures en jeu (intro, zone enneigée, appel du communicateur)
    (`spirv_vtx.cpp`), formats de sommets compressés, morphing du visage.
 2. ~~Visage du HUD à l'envers~~ : corrigé (V retourné pour toutes les textures nw::lyt) ; les
    portraits du communicateur (hexagones, au lieu de « X ») aussi.
-3. ~~Boîtes de dialogue mal construites~~ : corrigé (coordonnées de cadre `uFrameSpec` pour tous
-   les programmes, `shaders/lyt/README.md`). Encore plus claires que l'original : avant la
-   correction gamma du jeu, la boîte vaut (0,19 ; 0,32 ; 0,34) au lieu d'un sarcelle très sombre
-   (un des calques voile/lignes trop opaque, à vérifier).
+3. ~~Boîtes de dialogue mal construites~~ : corrigé (coordonnées de cadre `uFrameSpec` bornées
+   par pixel pour tous les programmes, Replace de l'étage 0 = capture du fond ;
+   `shaders/lyt/README.md`). Reste : texte du premier dialogue gris clair au lieu de cyan.
 4. **Artefacts en bas de l'écran** : blocs colorés (noir/blanc/magenta/cyan) sur les lignes
    704-719, surtout pendant les cinématiques (presque plus en jeu). Ce sont des valeurs HDR
    aberrantes : elles faussent aussi l'histogramme de luminance (case la plus claire pleine,
