@@ -416,27 +416,35 @@ texture n'envoie pas toujours `uTextureMode`. Détails : `shaders/lyt/README.md`
 ### Problèmes ouverts (retour de test du 2026-10-23)
 
 Relevés sur les captures en jeu (intro, zone enneigée, appel du communicateur) :
-1. **Modèle d'Alph déformé** (« on dirait un singe ») : visage et proportions faux, et il apparaît
-   parfois couché sur le côté. Pistes : skinning GPU (lecture des matrices d'os dans le bloc
-   uniforme, `spirv_vtx.cpp`), formats de sommets compressés, morphing du visage.
-2. **Visage toujours inversé** : à préciser (icône de la bulle du HUD ou visage du modèle 3D).
+1. **Modèle de Charlie / des Pikmin déformé** (« on dirait un singe ») : pas reproduit sur mes
+   captures (Charlie couché au début = animation de réveil de l'intro). Pistes : skinning GPU
+   (`spirv_vtx.cpp`), formats de sommets compressés, morphing du visage.
+2. ~~Visage du HUD à l'envers~~ : corrigé (V retourné pour toutes les textures nw::lyt) ; les
+   portraits du communicateur (hexagones, au lieu de « X ») aussi.
 3. **Boîtes de dialogue mal construites** : morceaux de cadre décalés, bandes cyan/noires
    striées qui dépassent du cadre, fond trop transparent (programme 3, `lyt_frame.vsh`).
-4. **Artefacts en bas de l'écran** : blocs colorés (noir/blanc/magenta/cyan) sur les dernières
-   lignes, présents dans toutes les scènes, plus nombreux pendant l'appel du communicateur.
-   Piste (2026-10-24) : ils naissent dans les tampons demi-résolution 640×368 (vue 640×360) aux
-   lignes 352 à 367, la dernière rangée de macro-tuiles (hauteur alignée sur 16), puis la
-   composition à pleine résolution les pose sur la bande 704-719. RenderDoc se contredit sur
-   ces lignes (historique de pixel noir, image enregistrée abîmée) : contenu Vulkan indéfini.
-   Écartés : particules (`DECAF_SKIP_PS=<nom du dump>` saute un shader), tampons
-   intermédiaires du tuilage, regroupement des surfaces 360/368. Corrigés en chemin dans decaf :
-   images neuves mises à zéro, barrières manquantes sur les tampons de (dé)tuilage.
-5. **Texte qui clignote.**
+4. **Artefacts en bas de l'écran** : blocs colorés (noir/blanc/magenta/cyan) sur les lignes
+   704-719, surtout pendant les cinématiques (presque plus en jeu). Ce sont des valeurs HDR
+   aberrantes : elles faussent aussi l'histogramme de luminance (case la plus claire pleine,
+   adaptation d'exposition à 12 828 au lieu de ~1), d'où les **écrans blancs** une image sur deux
+   ou trois pendant certaines cinématiques (voir `DECAF_RDOC_FRAMES`). Elles naissent dans les
+   tampons demi-résolution 640×368 (vue 640×360), lignes 352 à 367 ; RenderDoc se contredit
+   sur ces lignes (contenu Vulkan indéfini). Écartés : particules (`DECAF_SKIP_PS`), bokeh
+   (`DECAF_SKIP_TEXSIZE=192x32`), tampons intermédiaires, taille du tuilage (vérifiée avec
+   addrlib). Corrigés en chemin dans decaf : images neuves mises à zéro, barrières des tampons
+   de (dé)tuilage, surfaces regroupées sur leur hauteur alignée (16 lignes en 2D, 8 en 1D :
+   cible 8×8 / texture 1×1 de la visibilité du soleil, cible 704×240 / texture 684×234 du
+   texte des dialogues).
+5. **Texte qui clignote** : confirmé sur images consécutives (texte absent sur certaines) ;
+   le regroupement des surfaces ci-dessus vise ce cas, à revérifier.
 6. **Écran tactile sans effet** (« Toucher : bouger curseur ») : le toucher de la manette
    (VPADRead, `tpData`) n'est pas encore relié à la souris.
-7. **Image délavée** (brouillard trop fort) et bandes cinéma du haut/bas grises et
-   transparentes au lieu de noires.
-8. **Lenteur** : environ 15 à 20 images/s.
+7. **Image délavée** et bandes cinéma grises : probablement liée à l'exposition faussée (4).
+8. **Lenteur** : environ 28 à 30 images/s en jeu désormais (le jeu vise 30).
+
+Outils ajoutés : `DECAF_RDOC_FRAMES=<n>` (avec `--rdoc-capture`) capture n images consécutives ;
+`DECAF_SKIP_PS=<nom du dump>` et `DECAF_SKIP_TEXSIZE=<l>x<h>` sautent des dessins ; `--probe`
+journalise aussi les couleurs de `GX2ClearColor`.
 
 ### Shaders du décor (en cours)
 

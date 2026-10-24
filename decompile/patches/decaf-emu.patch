@@ -363,19 +363,21 @@ index 71cd2f9..45b64b9 100644
     std::vector<LoopState> mLoopStack;
  
 diff --git a/src/libgpu/src/vulkan/vulkan_descs.h b/src/libgpu/src/vulkan/vulkan_descs.h
-index 63fb1d6..f2f95cc 100644
+index 63fb1d6..b5ae4f7 100644
 --- a/src/libgpu/src/vulkan/vulkan_descs.h
 +++ b/src/libgpu/src/vulkan/vulkan_descs.h
-@@ -182,6 +182,13 @@ struct SurfaceDesc
+@@ -182,6 +182,15 @@ struct SurfaceDesc
        case latte::SQ_TEX_DIM::DIM_2D_ARRAY_MSAA:
        case latte::SQ_TEX_DIM::DIM_CUBEMAP:
           _dataHash.height = height;
-+         if (byCompat && tileMode >= latte::SQ_TILE_MODE::TILED_1D_THIN1 && height < 8) {
-+            // recomp : une cible 1x1 est vue en 8x8 côté tampon de couleur (taille déduite des
-+            // tuiles) et en 1x1 côté texture ; sans ce regroupement, la valeur repassait par la
-+            // mémoire avec deux tuilages différents (visibilité du soleil, exposition : valeurs
-+            // périmées relues, écran blanc).
-+            _dataHash.height = 8;
++         if (byCompat && tileMode >= latte::SQ_TILE_MODE::TILED_1D_THIN1) {
++            // recomp : une cible et la texture qui la relit décrivent la même mémoire avec des
++            // hauteurs différentes (704x240 et 684x234 pour le texte des dialogues, 8x8 et 1x1
++            // pour la visibilité du soleil, 640x368 et 640x360…). On les regroupe sur la hauteur
++            // alignée (16 lignes en tuilage 2D, 8 en 1D, d'après addrlib) : copie GPU au lieu
++            // d'un aller-retour par la mémoire, qui relisait parfois un contenu périmé.
++            auto align = tileMode >= latte::SQ_TILE_MODE::TILED_2D_THIN1 ? 16u : 8u;
++            _dataHash.height = (height + align - 1) & ~(align - 1);
 +         }
           // fallthrough
        case latte::SQ_TEX_DIM::DIM_1D:
@@ -419,7 +421,7 @@ index e96b29e..41fd55b 100644
     // Allocate buffer
     auto bufferDesc = vk::BufferCreateInfo { };
 diff --git a/src/libgpu/src/vulkan/vulkan_draw.cpp b/src/libgpu/src/vulkan/vulkan_draw.cpp
-index a800272..13ad72c 100644
+index a800272..c724ab9 100644
 --- a/src/libgpu/src/vulkan/vulkan_draw.cpp
 +++ b/src/libgpu/src/vulkan/vulkan_draw.cpp
 @@ -305,6 +305,22 @@ Driver::drawGenericIndexed(latte::VGT_DRAW_INITIATOR drawInit, uint32_t numIndic
@@ -445,12 +447,24 @@ index a800272..13ad72c 100644
     // Set up all the required state, ordering here is very important
     if (!checkCurrentVertexShader()) {
        gLog->debug("Skipped draw due to a vertex shader error");
-@@ -318,6 +334,12 @@ Driver::drawGenericIndexed(latte::VGT_DRAW_INITIATOR drawInit, uint32_t numIndic
+@@ -318,6 +334,24 @@ Driver::drawGenericIndexed(latte::VGT_DRAW_INITIATOR drawInit, uint32_t numIndic
        gLog->debug("Skipped draw due to a pixel shader error");
        return;
     }
 +   // recomp, diagnostic : DECAF_SKIP_PS=<nom du dump, ex. ffd02400> saute les dessins de ce shader.
 +   static const uint32_t skipPs = getenv("DECAF_SKIP_PS") ? static_cast<uint32_t>(strtoul(getenv("DECAF_SKIP_PS"), nullptr, 16)) : 0;
++   // DECAF_SKIP_TEXSIZE=<l>x<h> : saute les dessins dont la texture 0 du shader de pixels a cette taille.
++   static const char *skipTexSize = getenv("DECAF_SKIP_TEXSIZE");
++   if (skipTexSize) {
++      auto offset = latte::SQ_RES_OFFSET::PS_TEX_RESOURCE_0 * 7;
++      auto word0 = getRegister<latte::SQ_TEX_RESOURCE_WORD0_N>(latte::Register::SQ_RESOURCE_WORD0_0 + 4 * offset);
++      auto word1 = getRegister<latte::SQ_TEX_RESOURCE_WORD1_N>(latte::Register::SQ_RESOURCE_WORD1_0 + 4 * offset);
++      char size[32];
++      snprintf(size, sizeof(size), "%ux%u", word0.TEX_WIDTH() + 1, word1.TEX_HEIGHT() + 1);
++      if (strcmp(size, skipTexSize) == 0) {
++         return;
++      }
++   }
 +   if (skipPs && mCurrentDraw->pixelShader &&
 +       static_cast<uint32_t>(reinterpret_cast<uintptr_t>((*mCurrentDraw->pixelShader->desc).binary.data())) == skipPs) {
 +      return;
@@ -458,7 +472,7 @@ index a800272..13ad72c 100644
     if (!checkCurrentRectStubShader()) {
        gLog->debug("Skipped draw due to a rect stub shader error");
        return;
-@@ -363,6 +385,12 @@ Driver::drawGenericIndexed(latte::VGT_DRAW_INITIATOR drawInit, uint32_t numIndic
+@@ -363,6 +397,12 @@ Driver::drawGenericIndexed(latte::VGT_DRAW_INITIATOR drawInit, uint32_t numIndic
        return;
     }
  
@@ -471,7 +485,7 @@ index a800272..13ad72c 100644
     // These things need to happen up here before we enter the render pass, otherwise
     // the pipeline barrier triggered by the memory cache transition will fail.
     uint32_t opaqueStride = 0;
-@@ -402,6 +430,7 @@ Driver::drawGenericIndexed(latte::VGT_DRAW_INITIATOR drawInit, uint32_t numIndic
+@@ -402,6 +442,7 @@ Driver::drawGenericIndexed(latte::VGT_DRAW_INITIATOR drawInit, uint32_t numIndic
     // this order, since this draw might use the last renderpasses framebuffer as a texture, and we
     // need to barrier AFTER the previous draws are flushed.
     mCurrentDraw = &drawDesc;

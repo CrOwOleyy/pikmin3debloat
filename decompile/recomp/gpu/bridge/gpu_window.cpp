@@ -126,7 +126,11 @@ static void rdocCaptureLoop(uint32_t seconds)
       if (i)
          std::this_thread::sleep_for(std::chrono::seconds(atoi(every)));
       if (auto api = rdocApi()) {
-         reinterpret_cast<void (*)()>(api[15])(); // TriggerCapture
+         // DECAF_RDOC_FRAMES=<n> : <n> images consécutives (clignotements)
+         if (const char *frames = getenv("DECAF_RDOC_FRAMES"))
+            reinterpret_cast<void (*)(uint32_t)>(api[22])(atoi(frames)); // TriggerMultiFrameCapture
+         else
+            reinterpret_cast<void (*)()>(api[15])(); // TriggerCapture
          RT_INFO("RenderDoc : capture demandée");
       }
    }
