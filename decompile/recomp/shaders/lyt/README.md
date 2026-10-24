@@ -25,8 +25,8 @@ Ce qu'on sait (établi avec `--probe` et `--debug-colors`) :
 - `uFrameSpec` est un entier : bit 17 = miroir horizontal, bit 18 = miroir vertical du morceau
   de cadre ; `uFrameSize`, `uPaneSize`, `uRcpTexSize0` (1/taille de texture) accompagnent les
   cadres ; `uGeneratingTexCoord` et `uTextureMode` sont des entiers (voir plus bas) ;
-- programmes vus à l'écran : 3 = morceaux de cadre (`lyt_frame.vsh`), 12 = fond plein écran,
-  14/15 = contenu de fenêtre et boutons. Les autres reçoivent le shader générique.
+- programmes vus à l'écran : 12 = fond plein écran, 14/15 = contenu de fenêtre et boutons.
+  Tous reçoivent `lyt.vsh` (`lyt_frame.vsh` n'est plus utilisé, voir « Cadres de fenêtre »).
 
 Shader de pixels : combineur de textures (`lyt.psh`, produit par `gen_lyt_psh.py`), puis
 couleur = couleur du sommet × (`uInterpolateOffset` + P × `uInterpolateWidth`) - l'interpolation
@@ -83,3 +83,14 @@ coordonnées, avant le décalage indirect (dont le sens est ainsi le même en u 
 grossit le visage). Auparavant seules les cibles de rendu étaient retournées (registre C255 écrit
 par le pont) : le visage de la bulle du HUD et les portraits du communicateur étaient à l'envers
 (les deux moitiés des hexagones interverties dessinaient des « X »).
+
+## Cadres de fenêtre (uFrameSpec)
+
+Une fenêtre nw::lyt est dessinée en morceaux (haut, droite, bas, gauche, puis contenu), chacun
+avec le programme de son matériau - pas seulement le programme 3 : les boîtes de dialogue
+utilisent des programmes à 3 textures (halo, voile, lignes). `uFrameSpec` (C8, entier) :
+bits 8-11 = morceau (8 à B, D = contenu), bit 17 = miroir horizontal, bit 18 = vertical, octet
+bas non nul pour un morceau de cadre. Dans ce cas `lyt.vsh` remplace uv0 par
+(i ou 1-i) × taille du morceau × `uRcpTexSize0`, borné à 0,99 : le coin garde sa taille et son
+bord est étiré sur le reste du morceau. Auparavant ces morceaux étiraient tout le coin (bandes
+grises, cadre décalé, bande noire en bas des dialogues).

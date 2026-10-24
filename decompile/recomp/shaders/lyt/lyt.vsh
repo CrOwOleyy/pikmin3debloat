@@ -9,6 +9,9 @@
 ;   uv0    = bilinéaire(uVertexTexCoord0[0..3], i).xy, puis (u,v) = (uTexMtx0_xz, uTexMtx0_yw) . (s,t,0,1)
 ;   uv1, uv2 : idem avec uVertexTexCoord1/2 et uTexMtx1/2
 ;   uGeneratingTexCoord (C34, entier par jeu k) non nul : (s,t) = lignes 0-1 de uVertexTexCoordk . local
+;   morceau de cadre de fenêtre (octet bas de uFrameSpec, C8, non nul) : uv0 = (i ou 1-i, miroirs
+;   bits 17/18) * taille du morceau (uTransform.xy) * uRcpTexSize0, borné à 0,99 (coin à sa
+;   taille, bord étiré au-delà), v retourné pour compenser le retournement de lyt.psh
 ;   (projection du pane : 1/largeur, 0,5…) au lieu des 4 coins
 ;
 ; Registres de constantes (vec4) : C0-3 uProjection, C4-6 uModelView, C7 uTransform,
@@ -176,7 +179,7 @@
       w: DOT4            ____, R7.w, C10.w
   25  z: MOV             R9.z, 0.0f
       w: MOV             R9.w, 1.0f
-02 ALU: ADDR(131) CNT(66)
+02 ALU: ADDR(131) CNT(87)
   26  x: ADD             R7.x, C27.x, -C26.x
       y: ADD             R7.y, C27.y, -C26.y
       z: ADD             R8.z, C29.x, -C28.x
@@ -241,6 +244,22 @@
       w: DOT4            ____, R7.w, C14.w
   45  z: MOV             R11.z, 0.0f
       w: MOV             R11.w, 1.0f
+  46  x: AND_INT         R7.x, C8.x, (0x00020000, 0)
+      y: AND_INT         R7.y, C8.x, (0x00040000, 0)
+      z: ADD             R7.z, 1.0f, -R1.x
+      w: ADD             R7.w, 1.0f, -R1.y
+  47  x: CNDE_INT        R8.x, R7.x, R1.x, R7.z
+      y: CNDE_INT        R8.y, R7.y, R1.y, R7.w
+      z: AND_INT         R8.z, C8.x, (0x000000FF, 0)
+  48  x: MUL             R8.x, R8.x, C7.x
+      y: MUL             R8.y, R8.y, C7.y
+  49  x: MUL             R8.x, R8.x, C35.x
+      y: MUL             R8.y, R8.y, C35.y
+  50  x: MIN             R8.x, R8.x, (0x3F7D70A4, 0.99)
+      y: MIN             R8.y, R8.y, (0x3F7D70A4, 0.99)
+  51  y: ADD             R8.y, -R8.y, 1.0f
+  52  x: CNDE_INT        R9.x, R8.z, R9.x, R8.x
+      y: CNDE_INT        R9.y, R8.z, R9.y, R8.y
 03 EXP_DONE: POS0, R4.xyzw
 04 EXP: PARAM0, R5.xyzw NO_BARRIER
 05 EXP: PARAM1, R9.xyzw NO_BARRIER

@@ -17,7 +17,7 @@ HERE = Path(__file__).resolve().parent
 PROGRAM_COUNT = 30
 # Programmes dessinant les morceaux de cadre des fenêtres (identifiés avec --debug-colors) :
 # coordonnées de texture générées à partir de la taille du morceau (lyt_frame.vsh).
-FRAME_PROGRAMS = {3}
+FRAME_PROGRAMS = set()  # lyt.vsh gère désormais les cadres (uFrameSpec) pour tous les programmes
 
 
 def blocks(data):
