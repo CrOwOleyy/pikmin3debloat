@@ -433,13 +433,15 @@ Relevés sur les captures en jeu (intro, zone enneigée, appel du communicateur)
    dans les rejeux RenderDoc). La cible de visibilité du soleil accumulait ainsi des valeurs
    absurdes (disque blanc géant, exposition faussée), et les tampons demi-résolution gardaient
    des blocs aux lignes 352-367. Barrière désormais posée (`_barrierSurface`, `_barrierMemCache`).
-5. **Texte qui clignote** - probablement le disque blanc intermittent (4), à revérifier ; piste initiale (2026-10-24) : sur 6 images consécutives réellement
-   affichées (`DECAF_RDOC_FRAMES=6`, image du dessin vers la swapchain), la caméra alterne entre
-   deux cadrages une image sur deux. Ce n'est pas le GamePad (copies TV/DRC séparées par la
-   bibliothèque GX2 de decaf). Hypothèse : données doublement tamponnées par le jeu (caméra,
-   état des dialogues) dont une moitié serait périmée côté GPU - à tester en désactivant le
-   suivi d'écritures write-watch (`gpu/cpu_shim.cpp`, `runtime/memory.cpp`). Ancienne note : confirmé sur images consécutives (texte absent sur certaines) ;
-   le regroupement des surfaces ci-dessus vise ce cas, à revérifier.
+5. **Texte qui clignote** (pas encore corrigé) : cause côté processeur, pas côté rendu. Sur des
+   images consécutives, les 66 lettres d'un dialogue reçoivent toutes `uColor.a` = 20/255 une
+   image sur deux, 240/255 l'autre. nw::lyt (`sub_34536F4`, Pane::CalculateMtx) calcule
+   l'opacité globale des panes (+0x46) deux fois par image avec deux DrawInfo différents, et les
+   panes de caractères sont calculés depuis deux threads (piles 0x1A0A…/0x1A0B…). Quand
+   l'opacité vaut 255, le chemin rapide (0x03456BF8) n'envoie pas de couleur et les lettres
+   héritent de celle du pane précédent (240) ; sinon le chemin texte (0x03456C2C, 0x03458758)
+   envoie 20. Sondes : `DECAF_PROBE_LYT_COLOR=1` (envois de uColor 20/240 avec pile PowerPC) et
+   `DECAF_PROBE_PANE_ALPHA=1` (panes dont l'opacité globale alterne, `runtime/probe.cpp`).
 6. **Écran tactile sans effet** (« Toucher : bouger curseur ») : le toucher de la manette
    (VPADRead, `tpData`) n'est pas encore relié à la souris.
 7. **Image délavée** et bandes cinéma grises : probablement liée à l'exposition faussée (4).

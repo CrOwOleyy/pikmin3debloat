@@ -7,6 +7,9 @@
 
 #include <atomic>
 #include <cmath>
+#include <cstdlib>
+#include <mutex>
+#include <unordered_map>
 #include <cstring>
 
 namespace rt
@@ -79,4 +82,44 @@ void sub_3463540(PPCContext& __restrict ctx, uint8_t* base)
     for (int i = 0; i < 4; i++)
         RT_INFO("   a[%d] %s | b[%d] %s | out[%d] %s | ref %s", i, row(a + i * 4).c_str(), i,
             row(b + i * 4).c_str(), i, row(out + i * 4).c_str(), row(ref + i * 4).c_str());
+}
+
+extern "C" void __imp__sub_34536F4(PPCContext& __restrict ctx, uint8_t* base);
+
+// nw::lyt::Pane::CalculateMtx(DrawInfo&) : calcule l'opacité globale du pane (octet +0x46) =
+// opacité propre (+0x45) × facteur de DrawInfo (+0x10, flottant) selon ses drapeaux (+0x15,
+// +0x17). DECAF_PROBE_PANE_ALPHA : suit le premier pane dont l'opacité globale vaut 20 (texte
+// des dialogues qui clignote).
+void sub_34536F4(PPCContext& __restrict ctx, uint8_t* base)
+{
+    static const bool enabled = getenv("DECAF_PROBE_PANE_ALPHA") != nullptr;
+    if (!enabled)
+        return __imp__sub_34536F4(ctx, base);
+    const uint32_t pane = ctx.r3.u32, info = ctx.r4.u32;
+    const uint8_t before = rt::load8(pane + 0x46);
+    const float factor = guestFloat(info + 0x10);
+    const uint8_t f15 = rt::load8(info + 0x15), f17 = rt::load8(info + 0x17);
+    __imp__sub_34536F4(ctx, base);
+    static std::atomic<uint32_t> count { 0 };
+    static std::mutex lock;
+    static std::unordered_map<uint32_t, std::pair<int, int>> history; // pane -> (dernière opacité, sauts)
+    const uint8_t after = rt::load8(pane + 0x46);
+    bool alternating = false;
+    {
+        std::lock_guard guard(lock);
+        auto [it, fresh] = history.try_emplace(pane, int(after), 0);
+        if (!fresh && std::abs(int(after) - it->second.first) > 100)
+            alternating = ++it->second.second >= 4;
+        it->second.first = after;
+    }
+    if (alternating && count++ < 300)
+    {
+        char name[25] = {};
+        for (int i = 0; i < 24; i++)
+            name[i] = char(rt::load8(pane + 0x18 + i));
+        for (auto& c : name)
+            if (c && (c < 32 || c > 126)) c = '.';
+        RT_INFO("SONDE pane %08X '%s' alpha=%u glb %u->%u info=%08X facteur=%.4f f15=%u f17=%u parent=%08X flags44=%02X",
+            pane, name, rt::load8(pane + 0x45), before, after, info, factor, f15, f17, rt::load32(pane + 0xC), rt::load8(pane + 0x44));
+    }
 }

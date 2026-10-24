@@ -301,6 +301,28 @@ bool guardSetUniformReg(PPCContext& ctx)
 
 bool guardSetVertexUniformReg(PPCContext& ctx)
 {
+    // DECAF_PROBE_LYT_COLOR : chaque envoi de uColor (C15) par nw::lyt, avec l'appelant et
+    // l'opacité (×255×255), pour suivre les opacités qui alternent d'une image à l'autre.
+    static const bool probeColor = getenv("DECAF_PROBE_LYT_COLOR") != nullptr;
+    if (probeColor && ctx.r5.u32 && ctx.r3.u32 == 60 && (uint32_t(ctx.lr) >> 16) == 0x0346)
+    {
+        static std::atomic<uint32_t> count { 0 };
+        float a;
+        uint32_t bits = rt::load32(ctx.r5.u32 + 12);
+        memcpy(&a, &bits, 4);
+        const float v = a * 65025.0f;
+        static const uint32_t pane = getenv("DECAF_PROBE_LYT_COLOR") ? strtoul(getenv("DECAF_PROBE_LYT_COLOR"), nullptr, 16) : 0;
+        if (pane <= 1 ? ((v > 19.5f && v < 20.5f) || (v > 239.5f && v < 240.5f)) : ctx.r28.u32 == pane)
+        if (count++ < 4000)
+        {
+            // pile PowerPC : r1 -> cadre de l'appelant, adresse de retour à +4
+            uint32_t sp = ctx.r1.u32, bt[5] = {};
+            for (int k = 0; k < 5 && sp; k++) { sp = rt::load32(sp); bt[k] = sp ? rt::load32(sp + 4) : 0; }
+            RT_INFO("SONDE uColor t=%llu a=%.1f r28=0x%08X pile %08X %08X %08X %08X %08X",
+                (unsigned long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(),
+                v, ctx.r28.u32, bt[0], bt[1], bt[2], bt[3], bt[4]);
+        }
+    }
     if (rt::g_probe)
         probeUniforms("VS", ctx);
     return guardSetUniformReg(ctx);
