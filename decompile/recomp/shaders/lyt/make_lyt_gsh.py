@@ -61,9 +61,11 @@ def assemble(assembler, tmp, psh, vsh=HERE / "lyt.vsh"):
     return data[:struct.unpack_from(">I", data, 4)[0]], program, end[0]
 
 
-def fix_clauses(assembler, tmp, vsh, text):
-    """Assemble `text` (psh) en corrigeant ADDR/CNT des clauses d'après les erreurs de l'assembleur."""
-    psh = Path(tmp) / "fixed.psh"
+def fix_clauses(assembler, tmp, vsh, text, psh=None):
+    """Assemble `text` en corrigeant ADDR/CNT des clauses d'après les erreurs de l'assembleur.
+    Sans `psh`, `text` est le shader de pixels (assemblé avec `vsh`) ; avec `psh`, `text` est le
+    shader de sommets (assemblé avec ce `psh`)."""
+    target = Path(tmp) / ("fixed.vsh" if psh else "fixed.psh")
     # Renumérotation des groupes ALU et instructions TEX (des groupes ont pu être insérés)
     n, out = 0, []
     for line in text.split("\n"):
@@ -74,11 +76,11 @@ def fix_clauses(assembler, tmp, vsh, text):
         out.append(line)
     text = "\n".join(out)
     for _ in range(60):
-        psh.write_text(text, encoding="utf-8")
-        r = subprocess.run([assembler, "assemble", f"--vsh={vsh}", f"--psh={psh}", str(Path(tmp) / "probe.gsh")],
-                           capture_output=True, text=True)
+        target.write_text(text, encoding="utf-8")
+        args = [f"--vsh={target}", f"--psh={psh}"] if psh else [f"--vsh={vsh}", f"--psh={target}"]
+        r = subprocess.run([assembler, "assemble", *args, str(Path(tmp) / "probe.gsh")], capture_output=True, text=True)
         if r.returncode == 0:
-            return psh
+            return target
         m = re.search(r"(\d+):\d+ Incorrect clause (count|addr) \d+, expected (\d+)", r.stdout + r.stderr)
         assert m, r.stdout + r.stderr
         lines = text.split("\n")
@@ -100,6 +102,16 @@ def main():
         header, program, end = assemble(assembler, tmp, psh)
         frame = assemble(assembler, tmp, psh, HERE / "lyt_frame.vsh")[1]
         programs = [frame if i in FRAME_PROGRAMS else program for i in range(PROGRAM_COUNT)]
+        # Variante 1 (programmes 15 à 29, 0x034614F0) : panes blancs et opaques, le jeu n'envoie
+        # pas uColor (0x0346151C) ; la couleur de sommet vaut 1 au lieu de couleur × uColor (sinon
+        # la valeur laissée par le dessin précédent s'appliquait : texte qui clignotait).
+        vsh_text = (HERE / "lyt.vsh").read_text(encoding="utf-8")
+        white = vsh_text.replace("03 EXP_DONE: POS0", "  99  x: MOV R5.x, 1.0f\n      y: MOV R5.y, 1.0f\n"
+                                 "      z: MOV R5.z, 1.0f\n      w: MOV R5.w, 1.0f\n03 EXP_DONE: POS0", 1)
+        white_vsh = Path(tmp) / "white.vsh"
+        white_vsh.write_text(fix_clauses(assembler, tmp, None, white, psh).read_text(encoding="utf-8"), encoding="utf-8")
+        for i in range(15, PROGRAM_COUNT):
+            programs[i] = assemble(assembler, tmp, psh, white_vsh)[1]
         if psh == HERE / "lyt.psh":
             # Programme = indice de base du matériau (0x0345F8F4) + 15 × variante (0x034614F0).
             # Bases 0-2 (aucune ou une texture) : le jeu n'envoie uTextureMode que si le
@@ -124,7 +136,7 @@ def main():
                 if tag:
                     text = text.replace("z: MOV R20.z, 1.0f", f"z: MOV R20.z, 1.0f\n      w: MOV R20.w, {i + 100}.0f")
                 fixed = fix_clauses(assembler, tmp, HERE / "lyt.vsh", text)
-                vsh = HERE / ("lyt_frame.vsh" if i in FRAME_PROGRAMS else "lyt.vsh")
+                vsh = white_vsh if i >= 15 else HERE / ("lyt_frame.vsh" if i in FRAME_PROGRAMS else "lyt.vsh")
                 programs[i] = assemble(assembler, tmp, fixed, vsh)[1]
         if debug:
             programs = []

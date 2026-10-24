@@ -419,9 +419,7 @@ Relevés sur les captures en jeu (intro, zone enneigée, appel du communicateur)
 1. **Modèle de Charlie / des Pikmin déformé** (« on dirait un singe ») : pas reproduit sur mes
    captures (Charlie couché au début = animation de réveil de l'intro). Pistes : skinning GPU
    (`spirv_vtx.cpp`), formats de sommets compressés, morphing du visage.
-2. **Visage du HUD trop transparent** : le pane du visage est dessiné avec `uColor.a` = 64/255
-   (opacité 0,25, valeur envoyée par le jeu) ; à vérifier côté CPU (alpha hérité des panes
-   parents, animation). ~~Visage du HUD à l'envers~~ : corrigé (V retourné pour toutes les textures nw::lyt) ; les
+2. ~~Visage du HUD trop transparent~~ (voir 5) et ~~à l'envers~~ : corrigés : corrigé (V retourné pour toutes les textures nw::lyt) ; les
    portraits du communicateur (hexagones, au lieu de « X ») aussi.
 3. ~~Boîtes de dialogue mal construites~~ : corrigé (coordonnées de cadre `uFrameSpec` bornées
    par pixel pour tous les programmes, Replace de l'étage 0 = capture du fond ;
@@ -433,15 +431,13 @@ Relevés sur les captures en jeu (intro, zone enneigée, appel du communicateur)
    dans les rejeux RenderDoc). La cible de visibilité du soleil accumulait ainsi des valeurs
    absurdes (disque blanc géant, exposition faussée), et les tampons demi-résolution gardaient
    des blocs aux lignes 352-367. Barrière désormais posée (`_barrierSurface`, `_barrierMemCache`).
-5. **Texte qui clignote** (pas encore corrigé) : cause côté processeur, pas côté rendu. Sur des
-   images consécutives, les 66 lettres d'un dialogue reçoivent toutes `uColor.a` = 20/255 une
-   image sur deux, 240/255 l'autre. nw::lyt (`sub_34536F4`, Pane::CalculateMtx) calcule
-   l'opacité globale des panes (+0x46) deux fois par image avec deux DrawInfo différents, et les
-   panes de caractères sont calculés depuis deux threads (piles 0x1A0A…/0x1A0B…). Quand
-   l'opacité vaut 255, le chemin rapide (0x03456BF8) n'envoie pas de couleur et les lettres
-   héritent de celle du pane précédent (240) ; sinon le chemin texte (0x03456C2C, 0x03458758)
-   envoie 20. Sondes : `DECAF_PROBE_LYT_COLOR=1` (envois de uColor 20/240 avec pile PowerPC) et
-   `DECAF_PROBE_PANE_ALPHA=1` (panes dont l'opacité globale alterne, `runtime/probe.cpp`).
+5. ~~Texte qui clignote~~ : corrigé (2026-10-24). Les programmes lyt 15 à 29 (variante 1,
+   0x034614F0) servent aux panes blancs et opaques : le jeu n'envoie alors pas `uColor`
+   (0x0346151C). Notre shader reconstruit la lisait quand même et prenait la valeur laissée par
+   le dessin précédent : quand l'opacité de la boîte alternait 240/255 d'une image à l'autre,
+   les lettres passaient de 240 à 20 (opacité des lignes dessinées juste avant). La variante 1
+   a désormais une couleur de sommet à 1. Même cause pour le visage du HUD trop transparent.
+   Sondes : `DECAF_PROBE_LYT_COLOR`, `DECAF_PROBE_PANE_ALPHA=<s>` (`runtime/probe.cpp`).
 6. **Écran tactile sans effet** (« Toucher : bouger curseur ») : le toucher de la manette
    (VPADRead, `tpData`) n'est pas encore relié à la souris.
 7. **Image délavée** et bandes cinéma grises : probablement liée à l'exposition faussée (4).

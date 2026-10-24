@@ -6,6 +6,7 @@
 #include "runtime.h"
 
 #include <atomic>
+#include <chrono>
 #include <cmath>
 #include <cstdlib>
 #include <mutex>
@@ -85,41 +86,96 @@ void sub_3463540(PPCContext& __restrict ctx, uint8_t* base)
 }
 
 extern "C" void __imp__sub_34536F4(PPCContext& __restrict ctx, uint8_t* base);
+extern "C" void __imp__sub_3458580(PPCContext& __restrict ctx, uint8_t* base);
+extern "C" void __imp__sub_3456B48(PPCContext& __restrict ctx, uint8_t* base);
+extern "C" void __imp__sub_3451D18(PPCContext& __restrict ctx, uint8_t* base);
 
-// nw::lyt::Pane::CalculateMtx(DrawInfo&) : calcule l'opacité globale du pane (octet +0x46) =
-// opacité propre (+0x45) × facteur de DrawInfo (+0x10, flottant) selon ses drapeaux (+0x15,
-// +0x17). DECAF_PROBE_PANE_ALPHA : suit le premier pane dont l'opacité globale vaut 20 (texte
-// des dialogues qui clignote).
+// DECAF_PROBE_PANE_ALPHA : suit un pane de texte dont l'opacité globale (+0x46) n'est pas 255 au
+// dessin (texte des dialogues qui clignote) et journalise, dans l'ordre, ses calculs
+// (sub_34536F4, Pane::CalculateMtx) et ses dessins (sub_3458580), avec la pile (thread).
+namespace
+{
+std::atomic<uint32_t> sTracked { 0 }, sEvents { 0 };
+uint64_t nowMs()
+{
+    return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+}
+// valeur de DECAF_PROBE_PANE_ALPHA = secondes d'attente avant de choisir le pane suivi
+bool trackingOpen()
+{
+    static const uint64_t start = nowMs();
+    static const uint64_t delay = strtoull(getenv("DECAF_PROBE_PANE_ALPHA"), nullptr, 10) * 1000;
+    return nowMs() - start >= delay;
+}
+}
+
 void sub_34536F4(PPCContext& __restrict ctx, uint8_t* base)
 {
     static const bool enabled = getenv("DECAF_PROBE_PANE_ALPHA") != nullptr;
     if (!enabled)
         return __imp__sub_34536F4(ctx, base);
-    const uint32_t pane = ctx.r3.u32, info = ctx.r4.u32;
-    const uint8_t before = rt::load8(pane + 0x46);
+    const uint32_t pane = ctx.r3.u32, info = ctx.r4.u32, sp = ctx.r1.u32;
     const float factor = guestFloat(info + 0x10);
     const uint8_t f15 = rt::load8(info + 0x15), f17 = rt::load8(info + 0x17);
     __imp__sub_34536F4(ctx, base);
-    static std::atomic<uint32_t> count { 0 };
-    static std::mutex lock;
-    static std::unordered_map<uint32_t, std::pair<int, int>> history; // pane -> (dernière opacité, sauts)
-    const uint8_t after = rt::load8(pane + 0x46);
-    bool alternating = false;
+    const uint32_t tr = sTracked;
+    const uint32_t p1 = tr ? rt::load32(tr + 0xC) : 0, p2 = p1 ? rt::load32(p1 + 0xC) : 0, p3 = p2 ? rt::load32(p2 + 0xC) : 0;
+    if (tr && (pane == tr || pane == p1 || pane == p2 || pane == p3) && sEvents++ < 600)
+        RT_INFO("SONDE t=%llu calc pane %08X alpha=%u glb=%u info=%08X facteur=%.4f f15=%u f17=%u flags44=%02X sp=%08X",
+            (unsigned long long)nowMs(), pane, rt::load8(pane + 0x45), rt::load8(pane + 0x46), info, factor, f15, f17,
+            rt::load8(pane + 0x44), sp);
+}
+
+void sub_3458580(PPCContext& __restrict ctx, uint8_t* base)
+{
+    static const bool enabled = getenv("DECAF_PROBE_PANE_ALPHA") != nullptr;
+    if (enabled)
     {
-        std::lock_guard guard(lock);
-        auto [it, fresh] = history.try_emplace(pane, int(after), 0);
-        if (!fresh && std::abs(int(after) - it->second.first) > 100)
-            alternating = ++it->second.second >= 4;
-        it->second.first = after;
+        const uint32_t pane = ctx.r3.u32;
+        if (false)
+            sTracked = pane;
+        if (pane == sTracked && sEvents++ < 400)
+            RT_INFO("SONDE t=%llu draw pane %08X alpha=%u glb=%u info=%08X lr=%08X sp=%08X", (unsigned long long)nowMs(), pane,
+                rt::load8(pane + 0x45), rt::load8(pane + 0x46), ctx.r4.u32, uint32_t(ctx.lr), ctx.r1.u32);
     }
-    if (alternating && count++ < 300)
+    __imp__sub_3458580(ctx, base);
+}
+
+void sub_3456B48(PPCContext& __restrict ctx, uint8_t* base)
+{
+    static const bool enabled = getenv("DECAF_PROBE_PANE_ALPHA") != nullptr;
+    if (enabled)
     {
-        char name[25] = {};
-        for (int i = 0; i < 24; i++)
-            name[i] = char(rt::load8(pane + 0x18 + i));
-        for (auto& c : name)
-            if (c && (c < 32 || c > 126)) c = '.';
-        RT_INFO("SONDE pane %08X '%s' alpha=%u glb %u->%u info=%08X facteur=%.4f f15=%u f17=%u parent=%08X flags44=%02X",
-            pane, name, rt::load8(pane + 0x45), before, after, info, factor, f15, f17, rt::load32(pane + 0xC), rt::load8(pane + 0x44));
+        const uint32_t pane = ctx.r3.u32;
+        if (false)
+            sTracked = pane;
+        if (pane == sTracked && sEvents++ < 400)
+            RT_INFO("SONDE t=%llu draw2 pane %08X alpha=%u glb=%u info=%08X lr=%08X sp=%08X", (unsigned long long)nowMs(), pane,
+                rt::load8(pane + 0x45), rt::load8(pane + 0x46), ctx.r4.u32, uint32_t(ctx.lr), ctx.r1.u32);
     }
+    __imp__sub_3456B48(ctx, base);
+}
+
+void sub_3451D18(PPCContext& __restrict ctx, uint8_t* base)
+{
+    static const bool enabled = getenv("DECAF_PROBE_PANE_ALPHA") != nullptr;
+    if (enabled)
+    {
+        const uint32_t pane = ctx.r3.u32;
+        const uint8_t glb = rt::load8(pane + 0x46);
+        if (!sTracked && (glb == 240 || glb == 255) && rt::load32(pane + 0xa4) && trackingOpen())
+        {
+            // pane avec matériau dont l'opacité globale alterne 240/255 : on attend de le voir aux deux
+            static std::mutex lock;
+            static std::unordered_map<uint32_t, uint8_t> seen;
+            std::lock_guard guard(lock);
+            auto [it, fresh] = seen.try_emplace(pane, glb);
+            if (!fresh && it->second != glb)
+                sTracked = pane;
+        }
+        if (pane == sTracked && sEvents++ < 400)
+            RT_INFO("SONDE t=%llu draw3 pane %08X alpha=%u glb=%u info=%08X lr=%08X sp=%08X", (unsigned long long)nowMs(), pane,
+                rt::load8(pane + 0x45), glb, ctx.r4.u32, uint32_t(ctx.lr), ctx.r1.u32);
+    }
+    __imp__sub_3451D18(ctx, base);
 }

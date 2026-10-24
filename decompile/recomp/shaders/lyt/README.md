@@ -41,7 +41,9 @@ numéro) qui rend le programme d'un dessin lisible dans le désassemblage de Ren
 
 ## Programmes (0x0345F8F4, 0x034614F0)
 
-Numéro = indice de base du matériau (+0x14) + 15 × variante. Indice de base, d'après le nombre
+Numéro = indice de base du matériau (+0x14) + 15 × variante. Variante 1 (programmes 15-29) :
+pane blanc et opaque (couleurs de sommets blanches, opacité globale 255), le jeu n'envoie pas
+`uColor` ; `make_lyt_gsh.py` leur donne une couleur de sommet à 1. Indice de base, d'après le nombre
 de textures (mot +0xC, 2 bits de poids fort) et les étages de combinaison :
 1 = aucune texture, 2 = une texture ; 2 textures : 3 Replace/Interpolate, 4 Modulate, 5 Add,
 6 Subtract, 7 AddSigned, 8 Dodge, 9 Burn, 10 Overlay ; 3 textures : 11 (ou une valeur
