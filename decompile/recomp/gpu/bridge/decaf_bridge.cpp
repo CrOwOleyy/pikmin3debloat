@@ -421,53 +421,10 @@ bool guardSetVertexUniformBlockProbe(PPCContext& ctx)
     return false;
 }
 
-// Mémoire des cibles de couleur (GX2Surface : imageSize +0x20, image +0x24). Le vrai
-// lyt_BuildinShader retourne V pour les textures rendues par le GPU (convention des cibles de
-// rendu) ; notre shader reconstruit lit ce choix dans le registre C255 (lyt.psh).
-std::mutex s_targetLock;
-std::map<uint32_t, uint32_t> s_targets; // début -> fin
-
-void noteColorTarget(uint32_t surface)
-{
-    const uint32_t image = rt::load32(surface + 0x24), size = rt::load32(surface + 0x20);
-    if (!image || !size)
-        return;
-    std::lock_guard guard(s_targetLock);
-    s_targets[image] = image + size;
-}
-
-bool isColorTarget(uint32_t image)
-{
-    std::lock_guard guard(s_targetLock);
-    auto it = s_targets.upper_bound(image);
-    if (it == s_targets.begin())
-        return false;
-    --it;
-    return image < it->second;
-}
-
-void afterSetPixelTexture(PPCContext& ctx)
-{
-    if (ctx.r4.u32 != 0 || !ctx.r3.u32)
-        return;
-    static thread_local uint32_t buffer = rt::sysAlloc(16);
-    const bool target = isColorTarget(rt::load32(ctx.r3.u32 + 0x24));
-    const float values[4] = { target ? 1.0f : 0.0f, target ? -1.0f : 1.0f, 0.0f, 0.0f };
-    for (int i = 0; i < 4; i++)
-    {
-        uint32_t bits;
-        memcpy(&bits, &values[i], 4);
-        rt::store32(buffer + i * 4, bits);
-    }
-    cafe::gx2::GX2SetPixelUniformReg(255 * 4, 4, virt_cast<uint32_t *>(virt_addr { buffer }));
-}
-
 // --probe : cibles de couleur distinctes (GX2ColorBuffer : surface.dim +0, width +4, height +8,
 // depth +0xC, format +0x14, image +0x24, tileMode +0x30 ; viewMip +0x74, viewFirstSlice +0x78).
 bool guardSetColorBufferProbe(PPCContext& ctx)
 {
-    if (ctx.r3.u32)
-        noteColorTarget(ctx.r3.u32);
     // DECAF_RDOC_ON_CUBE : capture RenderDoc au premier rendu dans une cube map (sondes de lumière).
     static const bool rdocOnCube = getenv("DECAF_RDOC_ON_CUBE") != nullptr;
     // DECAF_RDOC_ON_SIZE=<l>x<h> : idem au premier rendu dans une cible de cette taille.
@@ -641,8 +598,6 @@ void decafGx2Register()
             auto* fn = static_cast<cafe::hle::LibraryFunction*>(symbol.get());
             auto guard = kGuards.find(name);
             auto* bridge = new BridgeFunction { fn, guard == kGuards.end() ? nullptr : guard->second };
-            if (name == "GX2SetPixelTexture")
-                bridge->after = afterSetPixelTexture;
             if (name == "rpl_entry")
                 s_gx2Entry = bridge;
             else if (fn->hostPtr)

@@ -1,7 +1,8 @@
 ; Shader de pixels de remplacement pour nw::lyt (combineur de textures).
 ; Entrées : R0 = couleur (PARAM0), R1/R2/R3 = uv0/uv1/uv2 (PARAM1-3).
 ; Constantes : C0.x = uTextureMode (entier), C1 = uInterpolateWidth, C2 = uInterpolateOffset,
-; C3/C4 = uIndirectMtx0/1, C255 = retournement de V de la texture 0 (écrit par le pont).
+; C3/C4 = uIndirectMtx0/1. v est retourné (1 - v) pour les trois jeux : nw::lyt le fait croître
+; vers le haut de l'écran, les textures (fichiers comme cibles de rendu) ont leur ligne 0 en haut.
 ;
 ; uTextureMode : 0 ou 1 (en flottant) = nombre de textures ; sinon un octet par étage k
 ; (texture k+1 combinée au résultat P) : code & 0x7F = 2 Replace (P inchangé), 3 Modulate,
@@ -48,7 +49,7 @@
 ; $CB_SHADER_MASK.OUTPUT0_ENABLE = 15
 ; $CB_SHADER_CONTROL.RT0_ENABLE = true
 
-00 ALU: ADDR(32) CNT(21)
+00 ALU: ADDR(32) CNT(26)
    0  x: AND_INT R4.y, C0.x, 0x7F
       y: LSHR_INT R4.w, C0.x, 0x8
       z: SETGT_UINT R4.x, 0x10000, C0.x
@@ -64,135 +65,137 @@
    4  x: MOV R20.x, 0.5f
       y: MOV R20.y, 2.0f
       z: MOV R20.z, 1.0f
+   5  y: ADD R1.y, -R1.y, 1.0f
+      t: ADD R2.y, -R2.y, 1.0f
+   6  y: ADD R3.y, -R3.y, 1.0f
 01 TEX: ADDR(192) CNT(2)
-   5  SAMPLE          R6, R2.xy0x, t1, s1
-   6  SAMPLE          R7, R3.xy0x, t2, s2
-02 ALU: ADDR(53) CNT(19)
-   7  x: CNDE_INT R8.x, R5.z, R7.x, R6.x
+   7  SAMPLE          R6, R2.xy0x, t1, s1
+   8  SAMPLE          R7, R3.xy0x, t2, s2
+02 ALU: ADDR(58) CNT(18)
+   9  x: CNDE_INT R8.x, R5.z, R7.x, R6.x
       y: CNDE_INT R8.y, R5.z, R7.y, R6.y
       z: CNDE_INT R8.z, R5.z, R7.z, R6.z
       w: MOV R8.w, 1.0f
-   8  x: DOT4 R11.x, R8.x, C3.x
+  10  x: DOT4 R11.x, R8.x, C3.x
       y: DOT4 ____, R8.y, C3.y
       z: DOT4 ____, R8.z, C3.z
       w: DOT4 ____, R8.w, C3.w
-   9  x: DOT4 ____, R8.x, C4.x
+  11  x: DOT4 ____, R8.x, C4.x
       y: DOT4 R11.y, R8.y, C4.y
       z: DOT4 ____, R8.z, C4.z
       w: DOT4 ____, R8.w, C4.w
-  10  z: OR_INT R11.z, R5.z, R5.w
-  11  x: CNDE_INT R11.x, R11.z, 0.0f, R11.x
+  12  z: OR_INT R11.z, R5.z, R5.w
+  13  x: CNDE_INT R11.x, R11.z, 0.0f, R11.x
       y: CNDE_INT R11.y, R11.z, 0.0f, R11.y
-  12  x: ADD R1.x, R1.x, R11.x
+  14  x: ADD R1.x, R1.x, R11.x
       y: ADD R1.y, R1.y, R11.y
-  13  y: MULADD R1.y, R1.y, C255.y, C255.x
 03 TEX: ADDR(196) CNT(1)
-  14  SAMPLE          R9, R1.xy0x, t0, s0
-04 ALU: ADDR(72) CNT(52)
-  15  x: SETE_INT R10.x, R4.y, 0x3
+  15  SAMPLE          R9, R1.xy0x, t0, s0
+04 ALU: ADDR(76) CNT(52)
+  16  x: SETE_INT R10.x, R4.y, 0x3
       y: SETE_INT R10.y, R4.y, 0x4
       z: SETE_INT R10.z, R4.y, 0x5
       w: SETE_INT R10.w, R4.y, 0x6
-  16  x: MUL R13.x, R9.x, R6.x
+  17  x: MUL R13.x, R9.x, R6.x
       y: MUL R13.y, R9.y, R6.y
       z: MUL R13.z, R9.z, R6.z
       w: MUL R13.w, R9.w, R6.w
-  17  x: ADD R14.x, R9.x, R6.x
+  18  x: ADD R14.x, R9.x, R6.x
       y: ADD R14.y, R9.y, R6.y
       z: ADD R14.z, R9.z, R6.z
       w: SETE_INT R11.x, R4.y, 0x9
-  18  x: ADD R15.x, R9.x, -R6.x
+  19  x: ADD R15.x, R9.x, -R6.x
       y: ADD R15.y, R9.y, -R6.y
       z: ADD R15.z, R9.z, -R6.z
-  19  x: ADD R16.x, R14.x, -R20.x
+  20  x: ADD R16.x, R14.x, -R20.x
       y: ADD R16.y, R14.y, -R20.x
       z: ADD R16.z, R14.z, -R20.x
-  20  x: ADD R17.x, R14.x, -R13.x
+  21  x: ADD R17.x, R14.x, -R13.x
       y: ADD R17.y, R14.y, -R13.y
       z: ADD R17.z, R14.z, -R13.z
-  21  x: MULADD R17.x, R17.x, R20.y, -R20.z
+  22  x: MULADD R17.x, R17.x, R20.y, -R20.z
       y: MULADD R17.y, R17.y, R20.y, -R20.z
       z: MULADD R17.z, R17.z, R20.y, -R20.z
-  22  x: ADD R18.x, R13.x, R13.x
+  23  x: ADD R18.x, R13.x, R13.x
       y: ADD R18.y, R13.y, R13.y
       z: ADD R18.z, R13.z, R13.z
-  23  x: ADD R19.x, R9.x, -R20.x
+  24  x: ADD R19.x, R9.x, -R20.x
       y: ADD R19.y, R9.y, -R20.x
       z: ADD R19.z, R9.z, -R20.x
-  24  x: CNDGE R17.x, R19.x, R17.x, R18.x
+  25  x: CNDGE R17.x, R19.x, R17.x, R18.x
       y: CNDGE R17.y, R19.y, R17.y, R18.y
       z: CNDGE R17.z, R19.z, R17.z, R18.z
-  25  x: CNDE_INT R9.x, R10.x, R9.x, R13.x
+  26  x: CNDE_INT R9.x, R10.x, R9.x, R13.x
       y: CNDE_INT R9.y, R10.x, R9.y, R13.y
       z: CNDE_INT R9.z, R10.x, R9.z, R13.z
       w: CNDE_INT R9.w, R12.x, R9.w, R13.w
-  26  x: CNDE_INT R9.x, R10.y, R9.x, R14.x
+  27  x: CNDE_INT R9.x, R10.y, R9.x, R14.x
       y: CNDE_INT R9.y, R10.y, R9.y, R14.y
       z: CNDE_INT R9.z, R10.y, R9.z, R14.z
-  27  x: CNDE_INT R9.x, R10.z, R9.x, R15.x
+  28  x: CNDE_INT R9.x, R10.z, R9.x, R15.x
       y: CNDE_INT R9.y, R10.z, R9.y, R15.y
       z: CNDE_INT R9.z, R10.z, R9.z, R15.z
-  28  x: CNDE_INT R9.x, R10.w, R9.x, R16.x
+  29  x: CNDE_INT R9.x, R10.w, R9.x, R16.x
       y: CNDE_INT R9.y, R10.w, R9.y, R16.y
       z: CNDE_INT R9.z, R10.w, R9.z, R16.z
-  29  x: CNDE_INT R9.x, R11.x, R9.x, R17.x
+  30  x: CNDE_INT R9.x, R11.x, R9.x, R17.x
       y: CNDE_INT R9.y, R11.x, R9.y, R17.y
       z: CNDE_INT R9.z, R11.x, R9.z, R17.z
-05 ALU: ADDR(124) CNT(60)
-  30  x: SETE_INT R10.x, R4.z, 0x3
+05 ALU: ADDR(128) CNT(60)
+  31  x: SETE_INT R10.x, R4.z, 0x3
       y: SETE_INT R10.y, R4.z, 0x4
       z: SETE_INT R10.z, R4.z, 0x5
       w: SETE_INT R10.w, R4.z, 0x6
-  31  x: MUL R13.x, R9.x, R7.x
+  32  x: MUL R13.x, R9.x, R7.x
       y: MUL R13.y, R9.y, R7.y
       z: MUL R13.z, R9.z, R7.z
       w: MUL R13.w, R9.w, R7.w
-  32  x: ADD R14.x, R9.x, R7.x
+  33  x: ADD R14.x, R9.x, R7.x
       y: ADD R14.y, R9.y, R7.y
       z: ADD R14.z, R9.z, R7.z
       w: SETE_INT R11.x, R4.z, 0x9
-  33  x: ADD R15.x, R9.x, -R7.x
+  34  x: ADD R15.x, R9.x, -R7.x
       y: ADD R15.y, R9.y, -R7.y
       z: ADD R15.z, R9.z, -R7.z
-  34  x: ADD R16.x, R14.x, -R20.x
+  35  x: ADD R16.x, R14.x, -R20.x
       y: ADD R16.y, R14.y, -R20.x
       z: ADD R16.z, R14.z, -R20.x
-  35  x: ADD R17.x, R14.x, -R13.x
+  36  x: ADD R17.x, R14.x, -R13.x
       y: ADD R17.y, R14.y, -R13.y
       z: ADD R17.z, R14.z, -R13.z
-  36  x: MULADD R17.x, R17.x, R20.y, -R20.z
+  37  x: MULADD R17.x, R17.x, R20.y, -R20.z
       y: MULADD R17.y, R17.y, R20.y, -R20.z
       z: MULADD R17.z, R17.z, R20.y, -R20.z
-  37  x: ADD R18.x, R13.x, R13.x
+  38  x: ADD R18.x, R13.x, R13.x
       y: ADD R18.y, R13.y, R13.y
       z: ADD R18.z, R13.z, R13.z
-  38  x: ADD R19.x, R9.x, -R20.x
+  39  x: ADD R19.x, R9.x, -R20.x
       y: ADD R19.y, R9.y, -R20.x
       z: ADD R19.z, R9.z, -R20.x
-  39  x: CNDGE R17.x, R19.x, R17.x, R18.x
+  40  x: CNDGE R17.x, R19.x, R17.x, R18.x
       y: CNDGE R17.y, R19.y, R17.y, R18.y
       z: CNDGE R17.z, R19.z, R17.z, R18.z
-  40  x: CNDE_INT R9.x, R10.x, R9.x, R13.x
+  41  x: CNDE_INT R9.x, R10.x, R9.x, R13.x
       y: CNDE_INT R9.y, R10.x, R9.y, R13.y
       z: CNDE_INT R9.z, R10.x, R9.z, R13.z
       w: CNDE_INT R9.w, R12.y, R9.w, R13.w
-  41  x: CNDE_INT R9.x, R10.y, R9.x, R14.x
+  42  x: CNDE_INT R9.x, R10.y, R9.x, R14.x
       y: CNDE_INT R9.y, R10.y, R9.y, R14.y
       z: CNDE_INT R9.z, R10.y, R9.z, R14.z
-  42  x: CNDE_INT R9.x, R10.z, R9.x, R15.x
+  43  x: CNDE_INT R9.x, R10.z, R9.x, R15.x
       y: CNDE_INT R9.y, R10.z, R9.y, R15.y
       z: CNDE_INT R9.z, R10.z, R9.z, R15.z
-  43  x: CNDE_INT R9.x, R10.w, R9.x, R16.x
+  44  x: CNDE_INT R9.x, R10.w, R9.x, R16.x
       y: CNDE_INT R9.y, R10.w, R9.y, R16.y
       z: CNDE_INT R9.z, R10.w, R9.z, R16.z
-  44  x: CNDE_INT R9.x, R11.x, R9.x, R17.x
+  45  x: CNDE_INT R9.x, R11.x, R9.x, R17.x
       y: CNDE_INT R9.y, R11.x, R9.y, R17.y
       z: CNDE_INT R9.z, R11.x, R9.z, R17.z
-  45  x: MULADD R9.x, R9.x, C1.x, C2.x
+  46  x: MULADD R9.x, R9.x, C1.x, C2.x
       y: MULADD R9.y, R9.y, C1.y, C2.y
       z: MULADD R9.z, R9.z, C1.z, C2.z
       w: MULADD R9.w, R9.w, C1.w, C2.w
-  46  x: MUL R0.x, R0.x, R9.x
+  47  x: MUL R0.x, R0.x, R9.x
       y: MUL R0.y, R0.y, R9.y
       z: MUL R0.z, R0.z, R9.z
       w: MUL R0.w, R0.w, R9.w

@@ -74,8 +74,12 @@ contient pas les 4 coins mais une projection, (s, t) = lignes 0 et 1 · (x, y, 0
 coordonnées locales du pane (par exemple (1/80, 0, 0, 0,5) pour un pane de 80 de large). Utilisé
 pour le fond flou des bulles et leurs reflets.
 
-## Textures rendues par le GPU (registre C255)
+## Orientation de V
 
-Une texture d'interface peut venir d'une cible de rendu (bulle de dialogue, lueur des titres) :
-son axe V est alors inversé. Le pont (`gpu/bridge/decaf_bridge.cpp`, `afterSetPixelTexture`)
-écrit `C255 = (1, -1)` dans ce cas, `(0, 1)` sinon ; `lyt.psh` calcule `v = C255.x + v * C255.y`.
+nw::lyt donne des coordonnées dont v croît vers le haut de l'écran (`uTexMtx0_yw` = (0, -1, 0, 1),
+soit v = 1 - t ; idem pour les coordonnées générées), alors que les textures, fichiers comme
+cibles de rendu, ont leur ligne 0 en haut. `lyt.psh` retourne donc v pour les trois jeux de
+coordonnées, avant le décalage indirect (dont le sens est ainsi le même en u et en v : la bulle
+grossit le visage). Auparavant seules les cibles de rendu étaient retournées (registre C255 écrit
+par le pont) : le visage de la bulle du HUD et les portraits du communicateur étaient à l'envers
+(les deux moitiés des hexagones interverties dessinaient des « X »).

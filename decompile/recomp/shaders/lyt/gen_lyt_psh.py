@@ -32,6 +32,11 @@ alu(
  ["x: AND_INT R4.y, R4.y, R4.x", "y: AND_INT R4.z, R4.z, R4.x", "z: AND_INT R12.x, R12.x, R4.x", "w: AND_INT R12.y, R12.y, R4.x"],
  ["x: SETGE_INT R5.z, R4.y, 0xE", "y: SETGE_INT R5.w, R4.z, 0xE"],
  ["x: MOV R20.x, 0.5f", "y: MOV R20.y, 2.0f", "z: MOV R20.z, 1.0f"],
+ # nw::lyt donne v croissant vers le haut de l'écran (v = 1 - t par uTexMtx), les textures sont
+ # rangées ligne 0 en haut : v est retourné pour les trois jeux, avant le décalage indirect.
+ # (l'unité ALU suit le canal écrit : deux .y au plus par groupe, le second en transcendant)
+ ["y: ADD R1.y, -R1.y, 1.0f", "t: ADD R2.y, -R2.y, 1.0f"],
+ ["y: ADD R3.y, -R3.y, 1.0f"],
 )
 tex("SAMPLE          R6, R2.xy0x, t1, s1", "SAMPLE          R7, R3.xy0x, t2, s2")
 # --- B : indirection (étage 0 : texture 1, étage 1 : texture 2), décalage de uv0 ---
@@ -42,7 +47,6 @@ alu(
  ["z: OR_INT R11.z, R5.z, R5.w"],
  ["x: CNDE_INT R11.x, R11.z, 0.0f, R11.x", "y: CNDE_INT R11.y, R11.z, 0.0f, R11.y"],
  ["x: ADD R1.x, R1.x, R11.x", "y: ADD R1.y, R1.y, R11.y"],
- ["y: MULADD R1.y, R1.y, C255.y, C255.x"],
 )
 tex("SAMPLE          R9, R1.xy0x, t0, s0")
 # --- C : combinaison, étage 0 (R6, code R4.y, alpha R12.x) puis étage 1 (R7, R4.z, R12.y) ---
