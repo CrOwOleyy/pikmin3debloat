@@ -33,7 +33,7 @@ target_compile_options(pikmin3 PRIVATE -march=x86-64-v3 /EHsc -Wno-unused-parame
 target_compile_definitions(pikmin3 PRIVATE
     PIKMIN3_RECOMP_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
     _CRT_SECURE_NO_WARNINGS)
-target_link_libraries(pikmin3 PRIVATE carrot_recomp Xinput)
+target_link_libraries(pikmin3 PRIVATE carrot_recomp Xinput winmm)
 
 # Rendu : GX2 + libgpu de decaf-emu (gpu/) et le pont vers notre runtime (gpu/bridge/).
 # ⚠️ decaf-emu est sous GPL-3.0 : pikmin3.exe l'est donc aussi s'il est distribué.

@@ -1,6 +1,9 @@
 // Dispatch des imports Cafe OS : chaque import du RPX (generated/imports.inc) devient
 // une fonction appelée par le code recompilé, qui renvoie vers l'implémentation HLE
 // enregistrée par HLE_FUNC, ou signale l'import comme non implémenté.
+#include <cstring>
+#include <chrono>
+#include <thread>
 #include "kernel.h"
 
 #include <atomic>
@@ -118,6 +121,11 @@ void hleCall(PPCContext& ctx, uint8_t* base, int id)
     if (n == 0)
         RT_WARN("HLE non implémenté : %s::%s(%08X, %08X, %08X, %08X) lr=%08X -> 0", kFuncImports[id].lib,
             kFuncImports[id].sym, ctx.r3.u32, ctx.r4.u32, ctx.r5.u32, ctx.r6.u32, uint32_t(ctx.lr));
+    // SpotPass (nn_boss) absent : le thread BossMgr du jeu interroge ces fonctions en boucle sans
+    // attendre (un cœur à 100 %, ce qui, sur un processeur à GPU intégré, prend de la puissance
+    // au GPU). Une courte pause en fait une attente polie sans changer les réponses.
+    if (strcmp(kFuncImports[id].lib, "nn_boss") == 0)
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
     ctx.r3.u64 = 0;
 }
 

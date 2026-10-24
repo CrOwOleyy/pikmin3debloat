@@ -48,7 +48,7 @@ static void profileLoop()
 
     // Par thread : pile d'appels résumée en « fonction feuille <- 4 appelants », hors attente
     // comptée à part avec son premier appelant hors système.
-    struct ThreadStats { uint32_t samples = 0; std::map<std::string, uint32_t> stacks; };
+    struct ThreadStats { uint32_t samples = 0; std::map<std::string, uint32_t> stacks, self, incl; };
     std::map<DWORD, ThreadStats> stats;
     const auto end = std::chrono::steady_clock::now() + std::chrono::seconds(g_profileSeconds);
     uint32_t passes = 0;
@@ -72,11 +72,22 @@ static void profileLoop()
                     pcs.push_back(frame.AddrPC.Offset);
                 ResumeThread(thread);
                 std::string key;
-                for (size_t i = 0; i < pcs.size() && i < 12; i++)
-                    key += (i ? " <- " : "") + symbolName(process, pcs[i]);
                 auto& st = stats[id];
+                std::vector<std::string> names;
+                for (size_t i = 0; i < pcs.size(); i++)
+                {
+                    names.push_back(symbolName(process, pcs[i]));
+                    if (i < 12)
+                        key += (i ? " <- " : "") + names.back();
+                }
                 st.samples++;
                 st.stacks[key]++;
+                if (!names.empty())
+                    st.self[names[0]]++;
+                std::sort(names.begin(), names.end());
+                names.erase(std::unique(names.begin(), names.end()), names.end());
+                for (auto& n : names)
+                    st.incl[n]++;
             }
             else
                 ResumeThread(thread);
@@ -96,6 +107,19 @@ static void profileLoop()
         const bool gpu = !sorted.empty() && sorted[0].second.find("ringbuffer") != std::string::npos;
         for (size_t i = 0; i < sorted.size() && i < (gpu ? 30 : 4); i++)
             RT_INFO("profil   %5.1f%%  %s", 100.0 * sorted[i].first / st.samples, sorted[i].second.c_str());
+        // Threads chargés (GPU de decaf, jeu qui attend le GPU) : temps propre et inclusif par fonction
+        const bool main = !sorted.empty() && sorted[0].second.find("GX2DrawDone") != std::string::npos;
+        if (gpu || main)
+            for (auto* table : { &st.self, &st.incl })
+            {
+                std::vector<std::pair<uint32_t, std::string>> flat;
+                for (auto& [name, count] : *table)
+                    flat.push_back({ count, name });
+                std::sort(flat.rbegin(), flat.rend());
+                for (size_t i = 0; i < flat.size() && i < 25; i++)
+                    RT_INFO("profil %s %5.1f%%  %s", table == &st.self ? "propre " : "inclus ", 100.0 * flat[i].first / st.samples,
+                        flat[i].second.c_str());
+            }
     }
 }
 

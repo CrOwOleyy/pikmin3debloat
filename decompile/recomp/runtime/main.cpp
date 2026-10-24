@@ -6,6 +6,7 @@
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <windows.h>
+#include <timeapi.h>
 
 #include <chrono>
 #include <filesystem>
@@ -161,6 +162,9 @@ DWORD WINAPI gameThread(void*)
 int main(int argc, char** argv)
 {
     SetConsoleOutputCP(CP_UTF8);
+    // Minuteur système à 1 ms : les attentes (alarmes dont la vsync à 60 Hz, OSSleepTicks…) se
+    // réveillent sinon par pas de 15,6 ms, et la vsync arrivait jusqu'à 15 ms en retard.
+    timeBeginPeriod(1);
     fs::path root = exeDir();
     fs::path imagePath = fs::path(PIKMIN3_RECOMP_DIR) / "carrot_linked.elf";
     int dumpAfter = 0;

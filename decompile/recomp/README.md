@@ -441,7 +441,13 @@ Relevés sur les captures en jeu (intro, zone enneigée, appel du communicateur)
 6. **Écran tactile sans effet** (« Toucher : bouger curseur ») : le toucher de la manette
    (VPADRead, `tpData`) n'est pas encore relié à la souris.
 7. **Image délavée** et bandes cinéma grises : probablement liée à l'exposition faussée (4).
-8. **Lenteur** : environ 28 à 30 images/s en jeu désormais (le jeu vise 30).
+8. ~~Lenteur~~ : 30 images/s stables (2026-10-25). Le thread BossMgr du jeu (SpotPass)
+   interrogeait en boucle des fonctions `nn_boss` non implémentées et occupait un cœur à 100 % ;
+   sur un processeur à GPU intégré (Ryzen AI + Radeon 880M), cela prenait de la puissance au GPU
+   et le jeu tombait selon les parties à 15-20 images/s (une image qui dépasse 33 ms attend
+   3 ou 4 vsync). Les stubs `nn_boss` font maintenant une pause d'1 ms. Le minuteur système passe
+   aussi à 1 ms (`timeBeginPeriod`) : les alarmes, dont la vsync, se réveillaient par pas de
+   15,6 ms. Le profileur (`--profile`) affiche le temps propre/inclusif par fonction.
 
 Outils ajoutés : `DECAF_RDOC_FRAMES=<n>` (avec `--rdoc-capture`) capture n images consécutives ;
 `DECAF_SKIP_PS=<nom du dump>` et `DECAF_SKIP_TEXSIZE=<l>x<h>` sautent des dessins ; `--probe`
