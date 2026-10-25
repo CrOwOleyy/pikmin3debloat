@@ -5,6 +5,7 @@
 // Activation : `--probe`. Sans l'option, l'appel est transmis tel quel.
 #include "runtime.h"
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cmath>
@@ -450,13 +451,22 @@ std::atomic<bool> s_radarLogged { false };
 std::atomic<bool> s_radarLogging { false };
 std::atomic<bool> s_radarRequest { false };
 std::atomic<int> s_paneDepth { 0 };
+std::atomic<int> s_fogLog { 0 };       // tests de brouillard restant à journaliser (F11)
+std::atomic<bool> s_ignoreFog { false }; // F10 : icônes de la carte affichées même sous le brouillard
 }
 
 namespace rt
 {
+void toggleRadarFog() // F10 (gpu_window.cpp), expérimental
+{
+    s_ignoreFog = !s_ignoreFog;
+    RT_INFO("RADAR : test de brouillard des icônes %s", s_ignoreFog ? "ignoré (F10)" : "normal");
+}
+
 void requestRadarProbe() // F11 (gpu_window.cpp)
 {
     s_radarRequest = true;
+    s_fogLog = 12;
     RT_INFO("RADAR : journal demandé pour le prochain dessin de la carte du GamePad");
 }
 }
@@ -533,6 +543,24 @@ void sub_2F40904(PPCContext& __restrict ctx, uint8_t* base)
             RT_INFO("RADAR %s @%08X :%s", label, addr, text.c_str());
         };
         dump("this+1360", self + 1360, 8);
+        if (const uint32_t fog = rt::load32(0x103F5900))
+        {
+            const uint32_t sampler = fog + 352;
+            const uint32_t mask = rt::load32(sampler + 1480);
+            const uint32_t data = mask ? rt::load32(mask + 40) : 0;
+            const uint32_t w = rt::load32(sampler + 344), h = rt::load32(sampler + 348);
+            uint32_t nonZero = 0, total = 0, maxValue = 0;
+            if (data >= 0x10000000 && data < 0x50000000 && w && h && w * h <= 4096 * 4096)
+                for (uint32_t i = 0; i < w * h; i++, total++)
+                {
+                    nonZero += base[data + i] != 0;
+                    maxValue = std::max<uint32_t>(maxValue, base[data + i]);
+                }
+            RT_INFO("RADAR brouillard : objet %08X masque %08X données %08X %ux%u : %u/%u octets non nuls, max %u", fog,
+                mask, data, w, h, nonZero, total, maxValue);
+            if (mask)
+                dump("masque (info)", mask, 32);
+        }
         const uint32_t replay = rt::load32(self + 3700);
         RT_INFO("RADAR replayMgr %08X : en replay (+364) = %u, carte visible (+3452) = %u, +1364 = %u", replay,
             replay ? base[replay + 364] : 0, base[self + 3452], base[self + 1364]);
@@ -619,3 +647,33 @@ COUNTED(2F392A0)
 
 // Ajout d'une icône dans la réserve de la carte du GamePad : compté en permanence (diagnostic)
 COUNTED_IF_ALWAYS(2F3C0B0, true, true)
+
+// Test « icône sous le brouillard » de la carte du GamePad (sub_2F2F518 : r3 = 1 si la valeur
+// du masque à cette position est sous 0,85, l'icône est alors cachée). F10 l'ignore (essai) ;
+// F11 journalise les 12 résultats suivants.
+extern "C" void __imp__sub_2F2F518(PPCContext& __restrict ctx, uint8_t* base);
+extern "C" void __imp__sub_2F2F4B4(PPCContext& __restrict ctx, uint8_t* base);
+
+void sub_2F2F518(PPCContext& __restrict ctx, uint8_t* base)
+{
+    const uint32_t pos = ctx.r4.u32;
+    if (s_fogLog > 0)
+    {
+        const uint32_t self = ctx.r3.u32;
+        __imp__sub_2F2F4B4(ctx, base); // valeur du masque (f1)
+        const double value = ctx.f1.f64;
+        ctx.r3.u64 = self;
+        ctx.r4.u64 = pos;
+        __imp__sub_2F2F518(ctx, base);
+        uint32_t x = rt::load32(pos), z = rt::load32(pos + 4);
+        float fx, fz;
+        memcpy(&fx, &x, 4);
+        memcpy(&fz, &z, 4);
+        RT_INFO("RADAR test de brouillard : position (%g, %g) valeur %g -> %s", fx, fz, value, ctx.r3.u32 ? "cachée" : "visible");
+        s_fogLog--;
+    }
+    else
+        __imp__sub_2F2F518(ctx, base);
+    if (s_ignoreFog)
+        ctx.r3.u64 = 0;
+}
