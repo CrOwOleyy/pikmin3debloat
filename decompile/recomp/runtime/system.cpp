@@ -24,6 +24,7 @@ struct GamePadInput
     float leftX = 0, leftY = 0, rightX = 0, rightY = 0;
 };
 GamePadInput inputSampleGamePad(); // input.cpp : clavier + manette XInput
+bool windowTouch(float& x, float& y); // gpu_window.cpp : souris -> écran tactile
 }
 
 // int32_t VPADRead(chan, VPADStatus* buffers, uint32_t count, VPADReadError* error)
@@ -78,17 +79,35 @@ HLE_FUNC(vpad, VPADRead)
     storeFloat(buf + 0x10, in.leftY);
     storeFloat(buf + 0x14, in.rightX);
     storeFloat(buf + 0x18, in.rightY);
+    // Écran tactile (souris, gpu_window.cpp) : coordonnées brutes 0..4096, y vers le haut (decaf)
+    float tx, ty;
+    const bool touched = windowTouch(tx, ty);
     for (uint32_t tp : { 0x52u, 0x5Au, 0x62u })
-        store16(buf + tp + 6, 3); // écran tactile : pas de contact (InvalidX | InvalidY)
+    {
+        if (touched)
+        {
+            store16(buf + tp + 0, uint16_t(std::fmin(tx * 4096.0f, 4095.0f)));
+            store16(buf + tp + 2, uint16_t(std::fmin((1.0f - ty) * 4096.0f, 4095.0f)));
+            store16(buf + tp + 4, 1);
+        }
+        else
+            store16(buf + tp + 6, 3); // pas de contact (InvalidX | InvalidY)
+    }
     store8(buf + 0xA1, 6);        // batterie pleine
     if (err)
         store32(err, 0);
     RET_S32(1);
 }
 
+// Calibrage par défaut de decaf : brut 0..4096 -> 1280x720, y retourné.
 HLE_FUNC(vpad, VPADGetTPCalibratedPoint)
 {
-    memcpy(ptr(ARG_U32(4)), ptr(ARG_U32(5)), 0xA);
+    const uint32_t out = ARG_U32(4), in = ARG_U32(5);
+    const uint16_t x = load16(in), y = load16(in + 2), touched = load16(in + 4), validity = load16(in + 6);
+    store16(out + 0, uint16_t(x * 1280.0f / 4096.0f));
+    store16(out + 2, uint16_t((4096 - y) * 720.0f / 4096.0f));
+    store16(out + 4, touched);
+    store16(out + 6, validity);
 }
 
 // ================================================================= padscore (Wiimote)

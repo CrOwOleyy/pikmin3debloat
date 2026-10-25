@@ -12,6 +12,7 @@
 
 #include <libcpu/mmu.h>
 #include <libgpu/gpu_config.h>
+#include <libgpu/gpu7_displaylayout.h>
 #include <libgpu/gpu_graphicsdriver.h>
 
 #include <thread>
@@ -97,6 +98,26 @@ void tclInit();
 void inputSetWindow(void* window);
 
 bool g_captureWindow = false;
+
+// Écran tactile du GamePad = souris : clic gauche maintenu sur l'écran du GamePad (--split), ou sur
+// toute l'image en mode TV seul (le GamePad n'y est pas affiché). Coordonnées 0..1.
+bool windowTouch(float& x, float& y)
+{
+   HWND window = s_window;
+   if (!window || GetForegroundWindow() != window || !(GetAsyncKeyState(VK_LBUTTON) & 0x8000))
+      return false;
+   POINT p;
+   RECT r;
+   if (!GetCursorPos(&p) || !ScreenToClient(window, &p) || !GetClientRect(window, &r))
+      return false;
+   auto layout = gpu7::getDisplayLayout(float(r.right), float(r.bottom));
+   const auto touch = gpu7::translateDisplayTouch(layout, float(p.x), float(p.y));
+   if (touch.screen == gpu7::DisplayTouchEvent::None || (layout.drc.visible && touch.screen == gpu7::DisplayTouchEvent::Tv))
+      return false;
+   x = touch.x;
+   y = touch.y;
+   return true;
+}
 uint32_t g_rdocCaptureAt = 0; // --rdoc-capture <s>
 
 // --rdoc-capture <s> : lancé sous RenderDoc (couche Vulkan VK_LAYER_RENDERDOC_Capture), demande la
