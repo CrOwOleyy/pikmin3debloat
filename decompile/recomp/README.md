@@ -447,8 +447,7 @@ Relevés sur les captures en jeu (intro, zone enneigée, appel du communicateur)
    les lettres passaient de 240 à 20 (opacité des lignes dessinées juste avant). La variante 1
    a désormais une couleur de sommet à 1. Même cause pour le visage du HUD trop transparent.
    Sondes : `DECAF_PROBE_LYT_COLOR`, `DECAF_PROBE_PANE_ALPHA=<s>` (`runtime/probe.cpp`).
-6. **Écran tactile sans effet** (« Toucher : bouger curseur ») : le toucher de la manette
-   (VPADRead, `tpData`) n'est pas encore relié à la souris.
+6. ~~Écran tactile sans effet~~ : la souris fait office d'écran tactile (voir 10).
 7. **Image délavée** et bandes cinéma grises : probablement liée à l'exposition faussée (4).
 8. ~~Lenteur~~ : 30 images/s stables (2026-10-25). Le thread BossMgr du jeu (SpotPass)
    interrogeait en boucle des fonctions `nn_boss` non implémentées et occupait un cœur à 100 % ;
@@ -457,14 +456,17 @@ Relevés sur les captures en jeu (intro, zone enneigée, appel du communicateur)
    3 ou 4 vsync). Les stubs `nn_boss` font maintenant une pause d'1 ms. Le minuteur système passe
    aussi à 1 ms (`timeBeginPeriod`) : les alarmes, dont la vsync, se réveillaient par pas de
    15,6 ms. Le profileur (`--profile`) affiche le temps propre/inclusif par fonction.
-9. **Plantage GX2 (2026-10-25, à traiter)** : assertion `cb->cmdSize == cb->cmdSizeTarget`
-   (`gx2_cbpool.h:152`) dans `GX2SetDepthStencilControl`, appelé depuis un thread de travail du
-   jeu (`sub_32385B8` → … → `sub_321D074`), juste après le chargement de mapC. Piste : decaf garde
-   un tampon de commandes actif **par cœur** (`activeCommandBuffer[cpu::this_core::id()]`) ; si
-   deux threads invités vus sur le même cœur (threads de travail des cœurs 0 et 2, thread
-   MakeStaticDL…) écrivent des commandes GX2 en même temps, ils se marchent dessus. Même famille
-   de bug que le cache verrouillé : un état « par cœur » partagé entre threads qui tournent
-   vraiment en parallèle.
+9. ~~Plantage GX2~~ (2026-10-25) : assertion `cb->cmdSize == cb->cmdSizeTarget` dans
+   `GX2SetDepthStencilControl`, appelé par un thread de travail juste après le chargement de mapC.
+   decaf garde le tampon de commandes actif **par cœur** et `GX2BeginDisplayList` y bascule
+   temporairement vers la liste d'affichage ; sur la console les threads d'un même cœur ne
+   tournent pas en même temps, ici si : un thread de travail qui construisait une liste
+   d'affichage partageait le tampon avec le thread de rendu. Les listes d'affichage sont
+   maintenant propres à chaque thread (`gx2_cbpool.cpp`, état de profilage compris dans
+   `gx2_state.cpp`) ; le tampon circulaire principal reste commun. Même famille de bug que le
+   cache verrouillé.
+10. ~~Écran tactile~~ : la souris est l'écran tactile du GamePad (clic gauche maintenu ; sur
+   l'écran du GamePad avec `--split`, sur toute l'image sinon). Confirmé en jeu.
 
 Outils ajoutés : `DECAF_RDOC_FRAMES=<n>` (avec `--rdoc-capture`) capture n images consécutives ;
 `DECAF_SKIP_PS=<nom du dump>` et `DECAF_SKIP_TEXSIZE=<l>x<h>` sautent des dessins ; `--probe`

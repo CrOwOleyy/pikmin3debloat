@@ -12,6 +12,166 @@ index b09593d..af5731a 100644
 +refreshMemoryState();
 +
  } // namespace cpu
+diff --git a/src/libdecaf/src/cafe/libraries/gx2/gx2_cbpool.cpp b/src/libdecaf/src/cafe/libraries/gx2/gx2_cbpool.cpp
+index 9110585..b935735 100644
+--- a/src/libdecaf/src/cafe/libraries/gx2/gx2_cbpool.cpp
++++ b/src/libdecaf/src/cafe/libraries/gx2/gx2_cbpool.cpp
+@@ -17,6 +17,8 @@
+ #include <libgpu/latte/latte_pm4.h>
+ #include <libgpu/latte/latte_pm4_writer.h>
+ 
++#include <atomic>
++
+ namespace cafe::gx2
+ {
+ 
+@@ -30,6 +32,10 @@ struct StaticCbPoolData
+ {
+    be2_struct<internal::ActiveCommandBuffer> mainCoreCommandBuffer;
+    be2_array<internal::ActiveCommandBuffer, 3> activeCommandBuffer;
++   // Recomp Pikmin 3 : une liste d'affichage en cours par thread. Sur la console, les threads d'un
++   // même cœur ne s'exécutent pas en même temps ; ici si, et une liste construite par un thread de
++   // travail partageait le tampon actif du cœur avec le thread de rendu.
++   be2_array<internal::ActiveCommandBuffer, 64> threadCommandBuffer;
+    be2_val<BOOL> profilingWasEnabledBeforeUserDisplayList;
+    be2_val<virt_addr> gpuLastReadCommandBuffer;
+    be2_val<GX2Timestamp> lastSubmittedTimestamp;
+@@ -146,13 +152,48 @@ void
+ padCommandBuffer(virt_ptr<ActiveCommandBuffer> cb);
+ 
+ 
++void
++initialiseCommandBuffer(virt_ptr<ActiveCommandBuffer> cb,
++                        virt_ptr<uint32_t> buffer,
++                        uint32_t bufferSizeWords,
++                        BOOL isUserBuffer);
++
++static std::atomic<uint32_t> sNextThreadSlot { 0 };
++static thread_local int tThreadSlot = -1;
++static thread_local BOOL tProfilingBeforeUserDisplayList = FALSE;
++
++/**
++ * Command buffer of the current thread's user display list (recomp: per thread).
++ */
++static virt_ptr<ActiveCommandBuffer>
++getThreadCommandBuffer()
++{
++   if (tThreadSlot < 0) {
++      tThreadSlot = static_cast<int>(sNextThreadSlot++);
++      decaf_check(tThreadSlot < 64);
++      initialiseCommandBuffer(virt_addrof(sCbPoolData->threadCommandBuffer[tThreadSlot]), nullptr, 0, FALSE);
++   }
++
++   return virt_addrof(sCbPoolData->threadCommandBuffer[tThreadSlot]);
++}
++
+ /**
+- * Get the active command buffer for the current core.
++ * Main ring command buffer (shared by threads not writing a display list).
++ */
++static virt_ptr<ActiveCommandBuffer>
++getRingCommandBuffer()
++{
++   return virt_addrof(sCbPoolData->activeCommandBuffer[getMainCoreId()]);
++}
++
++/**
++ * Get the active command buffer for the current thread.
+  */
+ virt_ptr<ActiveCommandBuffer>
+ getActiveCommandBuffer()
+ {
+-   return virt_addrof(sCbPoolData->activeCommandBuffer[cpu::this_core::id()]);
++   auto cb = getThreadCommandBuffer();
++   return cb->isUserBuffer ? cb : getRingCommandBuffer();
+ }
+ 
+ 
+@@ -226,9 +267,7 @@ initialiseCommandBuffer(virt_ptr<ActiveCommandBuffer> cb,
+ void
+ allocateCommandBuffer(uint32_t requiredNumWords)
+ {
+-   auto coreId = cpu::this_core::id();
+-   auto cb = virt_addrof(sCbPoolData->activeCommandBuffer[cpu::this_core::id()]);
+-   decaf_check(coreId == getMainCoreId());
++   auto cb = getRingCommandBuffer();
+    decaf_check(requiredNumWords < MaximumCommandBufferNumWords);
+    requiredNumWords = std::max(requiredNumWords, MinimumCommandBufferNumWords);
+ 
+@@ -298,17 +337,11 @@ beginUserCommandBuffer(virt_ptr<uint32_t> displayList,
+                        uint32_t bytes,
+                        BOOL profilingEnabled)
+ {
+-   auto coreId = cpu::this_core::id();
+-   auto cb = virt_addrof(sCbPoolData->activeCommandBuffer[cpu::this_core::id()]);
++   auto cb = getThreadCommandBuffer();
+    decaf_check(!cb->isUserBuffer);
+ 
+-   if (coreId == getMainCoreId()) {
+-      padCommandBuffer(cb);
+-      sCbPoolData->mainCoreCommandBuffer = *cb;
+-      sCbPoolData->profilingWasEnabledBeforeUserDisplayList = getProfilingEnabled();
+-   }
+-
+-   setProfilingEnabled(profilingEnabled);
++   tProfilingBeforeUserDisplayList = getProfilingEnabled();
++   setThreadProfilingEnabled(profilingEnabled);
+    initialiseCommandBuffer(cb, displayList, bytes / 4, TRUE);
+ }
+ 
+@@ -319,25 +352,20 @@ beginUserCommandBuffer(virt_ptr<uint32_t> displayList,
+ uint32_t
+ endUserCommandBuffer(virt_ptr<uint32_t> displayList)
+ {
+-   auto coreId = cpu::this_core::id();
+-   auto cb = virt_addrof(sCbPoolData->activeCommandBuffer[cpu::this_core::id()]);
++   auto cb = getThreadCommandBuffer();
+    decaf_check(cb->isUserBuffer);
+ 
+    // Pad the command buffer so it is ready for submission
+    padCommandBuffer(cb);
+    auto bufferSize = cb->bufferPosWords * 4;
+ 
+-   if (coreId == getMainCoreId()) {
+-      // Restore the main command buffer
+-      *cb = sCbPoolData->mainCoreCommandBuffer;
+-      setProfilingEnabled(sCbPoolData->profilingWasEnabledBeforeUserDisplayList);
+-   } else {
+-      // Clear the user display list
+-      cb->isUserBuffer = FALSE;
+-      cb->bufferPosWords = 0u;
+-      cb->bufferSizeWords = 0u;
+-      cb->buffer = nullptr;
+-   }
++   // Clear the user display list (the ring buffer was never switched out)
++   cb->isUserBuffer = FALSE;
++   cb->bufferPosWords = 0u;
++   cb->bufferSizeWords = 0u;
++   cb->buffer = nullptr;
++   clearThreadProfilingEnabled();
++   (void)tProfilingBeforeUserDisplayList;
+ 
+    return bufferSize;
+ }
+@@ -440,8 +468,7 @@ void
+ flushCommandBuffer(uint32_t requiredNumWords,
+                    BOOL writeConfirmTimestamp)
+ {
+-   auto coreId = cpu::this_core::id();
+-   auto cb = virt_addrof(sCbPoolData->activeCommandBuffer[cpu::this_core::id()]);
++   auto cb = getActiveCommandBuffer();
+ 
+    if (cb->isUserBuffer) {
+       auto usedSize = GX2EndDisplayList(cb->buffer);
+@@ -452,8 +479,6 @@ flushCommandBuffer(uint32_t requiredNumWords,
+                             newDisplayList.second,
+                             getProfilingEnabled());
+    } else {
+-      decaf_check(coreId == getMainCoreId());
+-
+       if (cb->bufferPosWords != 0) {
+          padCommandBuffer(cb);
+          queueCommandBuffer(cb->buffer,
 diff --git a/src/libdecaf/src/cafe/libraries/gx2/gx2_fetchshader.cpp b/src/libdecaf/src/cafe/libraries/gx2/gx2_fetchshader.cpp
 index 8e998c9..c97c57e 100644
 --- a/src/libdecaf/src/cafe/libraries/gx2/gx2_fetchshader.cpp
@@ -28,6 +188,56 @@ index 8e998c9..c97c57e 100644
  
           vfetch.word1 = vfetch.word1
              .DST_SEL_W(static_cast<latte::SQ_SEL>(attrib.mask & 0x7))
+diff --git a/src/libdecaf/src/cafe/libraries/gx2/gx2_state.cpp b/src/libdecaf/src/cafe/libraries/gx2/gx2_state.cpp
+index b5756d9..3d20944 100644
+--- a/src/libdecaf/src/cafe/libraries/gx2/gx2_state.cpp
++++ b/src/libdecaf/src/cafe/libraries/gx2/gx2_state.cpp
+@@ -369,9 +369,28 @@ getTossStage()
+    return sStateData->tossStage;
+ }
+ 
++// Recomp : pendant une liste d'affichage, état de profilage propre au thread (voir gx2_cbpool.cpp)
++static thread_local int tThreadProfiling = -1;
++
++void
++setThreadProfilingEnabled(BOOL enabled)
++{
++   tThreadProfiling = enabled ? 1 : 0;
++}
++
++void
++clearThreadProfilingEnabled()
++{
++   tThreadProfiling = -1;
++}
++
+ BOOL
+ getProfilingEnabled()
+ {
++   if (tThreadProfiling >= 0) {
++      return tThreadProfiling ? TRUE : FALSE;
++   }
++
+    return sStateData->profilingEnabled[cpu::this_core::id()];
+ }
+ 
+diff --git a/src/libdecaf/src/cafe/libraries/gx2/gx2_state.h b/src/libdecaf/src/cafe/libraries/gx2/gx2_state.h
+index 8c205f0..13ed4da 100644
+--- a/src/libdecaf/src/cafe/libraries/gx2/gx2_state.h
++++ b/src/libdecaf/src/cafe/libraries/gx2/gx2_state.h
+@@ -69,6 +69,12 @@ getProfilingEnabled();
+ void
+ setProfilingEnabled(BOOL enabled);
+ 
++void
++setThreadProfilingEnabled(BOOL enabled);
++
++void
++clearThreadProfilingEnabled();
++
+ } // namespace internal
+ 
+ } // namespace cafe::gx2
 diff --git a/src/libgpu/src/spirv/spirv_alu_op2.cpp b/src/libgpu/src/spirv/spirv_alu_op2.cpp
 index 91a6739..ea66b0e 100644
 --- a/src/libgpu/src/spirv/spirv_alu_op2.cpp
