@@ -416,9 +416,18 @@ texture n'envoie pas toujours `uTextureMode`. Détails : `shaders/lyt/README.md`
 ### Problèmes ouverts (retour de test du 2026-10-23)
 
 Relevés sur les captures en jeu (intro, zone enneigée, appel du communicateur) :
-1. **Modèle de Charlie / des Pikmin déformé** (« on dirait un singe ») : pas reproduit sur mes
-   captures (Charlie couché au début = animation de réveil de l'intro). Pistes : skinning GPU
-   (`spirv_vtx.cpp`), formats de sommets compressés, morphing du visage.
+1. ~~Modèle de Charlie / des Pikmin déformé~~ (« on dirait un singe ») : corrigé (2026-10-25,
+   confirmé en jeu). Le cache verrouillé (LC, 16 Kio privés par cœur sur Wii U) était une zone
+   unique partagée par tous les threads, et `LCDealloc` la libérait pour tout le monde. Les
+   tâches d'animation, qui tournent en parallèle sur plusieurs threads de travail, y
+   décompressent leurs poses : elles s'écrasaient mutuellement (racine tournée de 88°, jambes
+   ×1,49, bras ×1,41). Le LC est maintenant propre à chaque thread, avec l'allocateur par blocs
+   de 512 octets de decaf (`coreinit_mem.cpp`). La chaîne a été remontée avec des outils gardés
+   pour la suite : `DECAF_WATCH_BONES` (palette d'os, page de garde qui journalise les fonctions
+   qui écrivent), `DECAF_PROBE_SKIN=<adresse>` (entrées de `sub_343E98C` : matrices monde,
+   inverses de liaison, transformations locales), `DECAF_AUTO_STICK=<s>` (marche automatique).
+   `DCZeroRange` couvre aussi des lignes de cache entières, et la base de temps ne déborde plus
+   après 297 s.
 2. ~~Visage du HUD trop transparent~~ (voir 5) et ~~à l'envers~~ : corrigés : corrigé (V retourné pour toutes les textures nw::lyt) ; les
    portraits du communicateur (hexagones, au lieu de « X ») aussi.
 3. ~~Boîtes de dialogue mal construites~~ : corrigé (coordonnées de cadre `uFrameSpec` bornées

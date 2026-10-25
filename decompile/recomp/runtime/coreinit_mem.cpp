@@ -386,41 +386,78 @@ HLE_FUNC(coreinit, DCFlushRangeNoSync) {}
 HLE_FUNC(coreinit, DCInvalidateRange) {}
 HLE_FUNC(coreinit, DCStoreRange) {}
 HLE_FUNC(coreinit, DCStoreRangeNoSync) {}
-HLE_FUNC(coreinit, DCZeroRange) { memset(ptr(ARG_U32(3)), 0, ARG_U32(4)); }
+// DCZeroRange : dcbz sur chaque ligne de cache (32 octets) touchée par la plage
+HLE_FUNC(coreinit, DCZeroRange)
+{
+    const uint32_t begin = ARG_U32(3) & ~31u, end = (ARG_U32(3) + ARG_U32(4) + 31) & ~31u;
+    memset(ptr(begin), 0, end - begin);
+}
 HLE_FUNC(coreinit, OSMemoryBarrier) {}
 HLE_FUNC(coreinit, OSCoherencyBarrier) {}
 HLE_FUNC(coreinit, OSEnforceInorderIO) {}
 HLE_FUNC(coreinit, OSIsAddressRangeDCValid) { RET_U32(1); }
 
 // ================================================================= cache verrouillé (LC)
-// 16 Kio de « locked cache » par cœur, utilisés comme mémoire de travail rapide.
+// 16 Kio de « locked cache » privés par cœur, utilisés comme mémoire de travail rapide (les tâches
+// d'animation y décompressent leurs poses). Ici un LC par thread : un LC unique partagé laissait
+// les threads de travail, qui tournent en parallèle, écraser mutuellement leurs données (poses
+// de Charlie et des Pikmin déformées). Allocation par blocs de 512 octets comme decaf.
 namespace
 {
-uint32_t s_lcBase = 0;
-uint32_t s_lcUsed = 0;
-constexpr uint32_t kLcSize = 0x4000;
+constexpr uint32_t kLcSize = 0x4000, kLcBlock = 0x200, kLcBlocks = kLcSize / kLcBlock;
+struct LockedCache
+{
+    uint32_t base = 0, used = 0; // used : masque des blocs alloués
+    uint32_t masks[kLcBlocks] = {};
+};
+thread_local LockedCache t_lc;
+
+LockedCache& lockedCache()
+{
+    if (!t_lc.base)
+    {
+        std::lock_guard lock(s_memLock);
+        t_lc.base = sysAlloc(kLcSize, kLcBlock);
+    }
+    return t_lc;
+}
 }
 
 HLE_FUNC(coreinit, LCAlloc)
 {
-    std::lock_guard lock(s_memLock);
-    if (!s_lcBase)
-        s_lcBase = sysAlloc(kLcSize, 0x200);
-    const uint32_t size = alignUp(ARG_U32(3), 0x200);
-    if (s_lcUsed + size > kLcSize)
+    LockedCache& lc = lockedCache();
+    const uint32_t blocks = (ARG_U32(3) + kLcBlock - 1) / kLcBlock;
+    if (!blocks || blocks > kLcBlocks)
     {
         RET_U32(0);
         return;
     }
-    RET_U32(s_lcBase + s_lcUsed);
-    s_lcUsed += size;
+    const uint32_t mask = blocks == 32 ? 0xFFFFFFFFu : (1u << blocks) - 1;
+    for (uint32_t index = 0; index + blocks <= kLcBlocks; index++)
+        if (!(lc.used & (mask << index)))
+        {
+            lc.used |= mask << index;
+            lc.masks[index] = mask << index;
+            RET_U32(lc.base + index * kLcBlock);
+            return;
+        }
+    RET_U32(0);
 }
 HLE_FUNC(coreinit, LCDealloc)
 {
-    std::lock_guard lock(s_memLock);
-    s_lcUsed = 0;
+    LockedCache& lc = lockedCache();
+    const uint32_t addr = ARG_U32(3);
+    if (addr < lc.base || addr >= lc.base + kLcSize)
+        return;
+    const uint32_t index = (addr - lc.base) / kLcBlock;
+    lc.used &= ~lc.masks[index];
+    lc.masks[index] = 0;
 }
-HLE_FUNC(coreinit, LCGetUnallocated) { RET_U32(kLcSize - s_lcUsed); }
+HLE_FUNC(coreinit, LCGetUnallocated)
+{
+    LockedCache& lc = lockedCache();
+    RET_U32(uint32_t(kLcBlocks - __builtin_popcount(lc.used)) * kLcBlock);
+}
 HLE_FUNC(coreinit, LCEnableDMA) { RET_U32(1); }
 HLE_FUNC(coreinit, LCDisableDMA) {}
 HLE_FUNC(coreinit, LCLoadDMABlocks) { memmove(ptr(ARG_U32(3)), ptr(ARG_U32(4)), (ARG_U32(5) ? ARG_U32(5) : 128) * 32); }

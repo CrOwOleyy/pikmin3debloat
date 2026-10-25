@@ -157,6 +157,18 @@ GamePadInput inputSampleGamePad()
     sampleXInput(in);
     if (g_autoA && GetTickCount64() % g_autoA < 100)
         in.buttons |= vpad::A;
+    // DECAF_AUTO_STICK=<s> : après <s> secondes, stick gauche par phases de 1,5 s (bas, repos,
+    // gauche, repos…) pour filmer la marche sans joueur.
+    static const char* autoStick = getenv("DECAF_AUTO_STICK");
+    static const uint64_t start = GetTickCount64();
+    if (autoStick && GetTickCount64() - start > strtoull(autoStick, nullptr, 10) * 1000)
+    {
+        const uint64_t phase = (GetTickCount64() - start) / 1500 % 4;
+        if (phase == 0)
+            in.leftY = -1.0f;
+        else if (phase == 2)
+            in.leftX = -1.0f;
+    }
     const HWND window = s_window.load();
     if (window && GetForegroundWindow() == window)
     {

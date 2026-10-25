@@ -451,16 +451,44 @@ bool guardSetVertexUniformBlockProbe(PPCContext& ctx)
         memcpy(m, rt::g_base + ctx.r5.u32, sizeof(m));
         const float sx = std::sqrt(m[0] * m[0] + m[4] * m[4] + m[8] * m[8]);
         const float sy = std::sqrt(m[1] * m[1] + m[5] * m[5] + m[9] * m[9]);
+        static int addrs = 0;
+        if (std::fabs(sx - 1.5f) < 0.01f && std::fabs(m[3]) > 100.0f && addrs < 12)
+            RT_INFO("OS palette %d : 0x%08X", addrs++, ctx.r5.u32);
+        // DECAF_WATCH_BONES=<adresse> : journalise les écritures dans la palette à cette adresse
+        static const uint32_t watchAddr = strtoul(getenv("DECAF_WATCH_BONES"), nullptr, 16);
+        static const uint32_t watchSize = getenv("DECAF_WATCH_SIZE") ? strtoul(getenv("DECAF_WATCH_SIZE"), nullptr, 16) : 480;
+        static bool watching = false;
+        if (watchAddr > 1 && !watching && addrs >= 12)
+        {
+            watching = true;
+            rt::watchRange(watchAddr, watchSize, 40, "palette");
+        }
         static auto last = std::chrono::steady_clock::now();
         const auto now = std::chrono::steady_clock::now();
         if (std::fabs(sx - 1.5f) < 0.01f && std::fabs(sy - 1.5f) < 0.05f && std::fabs(m[3]) > 100.0f &&
-            now - last > std::chrono::milliseconds(250))
+            now - last > std::chrono::milliseconds(500))
         {
             last = now;
             const float tilt = std::acos(std::fmin(1.0f, std::fabs(m[5]) / sy)) * 57.29578f;
-            const float sy1 = std::sqrt(m[13] * m[13] + m[17] * m[17] + m[21] * m[21]);
-            RT_INFO("OS racine : incl. %5.1f, pos %.1f %.1f %.1f, axeY %.3f %.3f %.3f | os1 axeY %.3f %.3f %.3f (éch. %.3f)",
-                tilt, m[3], m[7], m[11], m[1] / sy, m[5] / sy, m[9] / sy, m[13] / sy1, m[17] / sy1, m[21] / sy1, sy1);
+            // Angle de rotation de chaque os par rapport à la racine (colonnes normalisées)
+            float all[120];
+            memcpy(all, rt::g_base + ctx.r5.u32, sizeof(all));
+            std::string rel;
+            for (int bone = 1; bone < 10; bone++)
+            {
+                const float* q = all + bone * 12;
+                float tr = 0;
+                for (int c = 0; c < 3; c++)
+                {
+                    const float na = std::sqrt(m[c] * m[c] + m[4 + c] * m[4 + c] + m[8 + c] * m[8 + c]);
+                    const float nb = std::sqrt(q[c] * q[c] + q[4 + c] * q[4 + c] + q[8 + c] * q[8 + c]);
+                    tr += (m[c] * q[c] + m[4 + c] * q[4 + c] + m[8 + c] * q[8 + c]) / (na * nb);
+                }
+                char v[16];
+                snprintf(v, sizeof(v), " %3.0f", std::acos(std::fmax(-1.0f, std::fmin(1.0f, (tr - 1) / 2))) * 57.29578f);
+                rel += v;
+            }
+            RT_INFO("OS racine : incl. %5.1f, pos %.1f %.1f %.1f, os/racine :%s", tilt, m[3], m[7], m[11], rel.c_str());
         }
     }
     if (!rt::g_probe || ctx.r3.u32 != 2 || !ctx.r5.u32 || ctx.r4.u32 < 80)

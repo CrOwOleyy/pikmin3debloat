@@ -179,3 +179,90 @@ void sub_3451D18(PPCContext& __restrict ctx, uint8_t* base)
     }
     __imp__sub_3451D18(ctx, base);
 }
+
+// DECAF_PROBE_SKIN=<adresse de palette> : entrées de sub_343E98C (palette d'os = matrice A de l'os
+// × matrice B, écrite en petit-boutiste) pour le squelette qui écrit dans cette palette.
+extern "C" void __imp__sub_343E98C(PPCContext& __restrict ctx, uint8_t* base);
+
+void sub_343E98C(PPCContext& __restrict ctx, uint8_t* base)
+{
+    static const char* env = getenv("DECAF_PROBE_SKIN");
+    const uint32_t self = ctx.r3.u32;
+    __imp__sub_343E98C(ctx, base);
+    if (!env)
+        return;
+    // Toutes les matrices monde (B) : échelle par axe comparée à celle de l'os 0
+    {
+        const uint32_t res = rt::load32(self), table = rt::load32(self + 0x10);
+        const uint32_t count = rt::load32(res + 0x8) & 0xFFFF, listOff = rt::load32(res + 0x18);
+        auto norm = [&](uint32_t m, int c) {
+            const float x = guestFloat(m + c * 4), y = guestFloat(m + 16 + c * 4), z = guestFloat(m + 32 + c * 4);
+            return std::sqrt(x * x + y * y + z * z);
+        };
+        static std::atomic<uint32_t> bad { 0 }, total { 0 };
+        total++;
+        const uint32_t m0 = table + (rt::load32(res + 0x18 + listOff) >> 16) * 0x30;
+        const float ref = norm(m0, 0);
+        for (uint32_t i = 0; i < count && i < 64; i++)
+        {
+            const uint32_t bone = rt::load32(res + 0x18 + listOff + i * 2) >> 16;
+            const uint32_t m = table + bone * 0x30;
+            const float n0 = norm(m, 0), n1 = norm(m, 1), n2 = norm(m, 2);
+            if (std::fabs(n0 - ref) > 0.03f * ref || std::fabs(n1 - ref) > 0.03f * ref || std::fabs(n2 - ref) > 0.03f * ref)
+            {
+                if (bad++ % 2000 == 0)
+                    RT_INFO("SKIN déformé : squelette %08X (%u os) os %u : échelles %.3f %.3f %.3f (réf %.3f) - %u/%u appels",
+                        self, count, bone, n0, n1, n2, ref, bad.load(), total.load());
+                break;
+            }
+        }
+    }
+    if (rt::load32(self + 0x18) != strtoul(env, nullptr, 16))
+        return;
+    static uint64_t last = 0;
+    const uint64_t now = uint64_t(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count());
+    if (now - last < 1000)
+        return;
+    last = now;
+    const uint32_t res = rt::load32(self);
+    const uint32_t joints = rt::load32(self + 8), table = rt::load32(self + 0x10);
+    const uint32_t count = rt::load32(res + 0x8) & 0xFFFF, listOff = rt::load32(res + 0x18);
+    RT_INFO("SKIN %08X res %08X joints %08X table %08X locaux %08X n %u", self, res, joints, table, rt::load32(self + 0xC), count);
+    for (uint32_t i = 0; i < count && i < 16; i++)
+    {
+        const uint32_t bone = rt::load32(res + 0x18 + listOff + i * 2) >> 16;
+        float a[12], b[12];
+        for (int k = 0; k < 12; k++)
+        {
+            a[k] = guestFloat(joints + bone * 0x70 + 0x40 + k * 4);
+            b[k] = guestFloat(table + bone * 0x30 + k * 4);
+        }
+        RT_INFO("SKIN  os %u (%u) A %s | %s | %s   B %s | %s | %s", i, bone, row(a).c_str(), row(a + 4).c_str(),
+            row(a + 8).c_str(), row(b).c_str(), row(b + 4).c_str(), row(b + 8).c_str());
+        float c[12];
+        for (int k = 0; k < 12; k++)
+        {
+            uint32_t bits;
+            memcpy(&bits, base + rt::load32(self + 0x18) + i * 0x30 + k * 4, 4); // petit-boutiste
+            memcpy(&c[k], &bits, 4);
+        }
+        RT_INFO("SKIN  os %u palette %s | %s | %s", i, row(c).c_str(), row(c + 4).c_str(), row(c + 8).c_str());
+    }
+    // Transformations locales (animation) : table *(self+0xC), 0x40 octets par os (drapeaux, échelle,
+    // matrice 3x4 en +0x10) ; articulation j : +4 os, +6 parent.
+    const uint32_t locals = rt::load32(self + 0xC);
+    const uint32_t joints2 = rt::load32(self + 8);
+    const uint32_t total = rt::load32(self + 0x2C) >> 16;
+    for (uint32_t j = 0; j < total && j < 32; j++)
+    {
+        const uint32_t jb = joints2 + j * 0x70;
+        const uint32_t bone = rt::load32(jb + 4) >> 16, parent = rt::load32(jb + 4) & 0xFFFF;
+        const uint32_t l = locals + bone * 0x40;
+        float m[12];
+        for (int k = 0; k < 12; k++)
+            m[k] = guestFloat(l + 0x10 + k * 4);
+        RT_INFO("SKIN  art %u os %u parent %u drapeaux %08X échelle %g %g %g local %s | %s | %s", j, bone, parent,
+            rt::load32(l), guestFloat(l + 4), guestFloat(l + 8), guestFloat(l + 12), row(m).c_str(), row(m + 4).c_str(),
+            row(m + 8).c_str());
+    }
+}

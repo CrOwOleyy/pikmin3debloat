@@ -42,7 +42,7 @@ std::string stackOf(CONTEXT* source)
     frame.AddrFrame.Offset = context.Rbp; frame.AddrFrame.Mode = AddrModeFlat;
     frame.AddrStack.Offset = context.Rsp; frame.AddrStack.Mode = AddrModeFlat;
     std::string text;
-    for (int depth = 0; depth < 14 && StackWalk64(IMAGE_FILE_MACHINE_AMD64, process, GetCurrentThread(), &frame,
+    for (int depth = 0; depth < 24 && StackWalk64(IMAGE_FILE_MACHINE_AMD64, process, GetCurrentThread(), &frame,
              &context, nullptr, SymFunctionTableAccess64, SymGetModuleBase64, nullptr); depth++)
     {
         alignas(SYMBOL_INFO) char buffer[sizeof(SYMBOL_INFO) + 256];
@@ -90,6 +90,13 @@ LONG CALLBACK watchHandler(EXCEPTION_POINTERS* info)
     return EXCEPTION_CONTINUE_EXECUTION;
 }
 } // namespace
+
+std::string hostStack()
+{
+    CONTEXT context {};
+    RtlCaptureContext(&context);
+    return stackOf(&context);
+}
 
 void watchRange(uint32_t addr, uint32_t size, uint32_t maxHits, const char* label)
 {

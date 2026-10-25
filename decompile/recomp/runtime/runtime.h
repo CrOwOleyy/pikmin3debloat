@@ -103,6 +103,7 @@ extern bool g_traceHle;
 extern bool g_probe; // --probe : sondes de diagnostic (probe.cpp, shaders…)
 // Diagnostic : journalise la pile d'appels des écritures dans [addr, addr+size) (watch.cpp).
 void watchRange(uint32_t addr, uint32_t size, uint32_t maxHits, const char* label);
+std::string hostStack(); // pile d'appels hôte symbolisée (watch.cpp)
 extern std::string g_traceFilter; // --trace-filter : ne trace que les imports contenant ce texte
 extern bool g_recordHle;          // --record <filtre> : enregistre en mémoire, vidé par --dump
 extern std::string g_recordFilter;
