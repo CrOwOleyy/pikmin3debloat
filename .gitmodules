@@ -1,0 +1,12 @@
+[submodule "decompile/tools/decaf-emu"]
+	path = decompile/tools/decaf-emu
+	url = https://github.com/decaf-emu/decaf-emu.git
+	ignore = dirty
+[submodule "decompile/tools/XenonRecomp"]
+	path = decompile/tools/XenonRecomp
+	url = https://github.com/hedge-dev/XenonRecomp.git
+	ignore = dirty
+[submodule "decompile/tools/Vulkan-Headers"]
+	path = decompile/tools/Vulkan-Headers
+	url = https://github.com/KhronosGroup/Vulkan-Headers.git
+	ignore = dirty

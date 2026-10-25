@@ -12,7 +12,7 @@ set(DECAF_SRC ${DECAF_DIR}/src)
 find_package(Vulkan REQUIRED)
 # En-têtes Vulkan de l'époque de decaf (nov. 2023) : le vulkan.hpp du SDK récent a déplacé
 # des types (vk::detail) et changé des signatures. Seul le loader vulkan-1.lib vient du SDK.
-set(DECAF_VULKAN_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/../../tools/Vulkan-Headers-1.3.268/include)
+set(DECAF_VULKAN_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/../../tools/Vulkan-Headers/include)
 
 # Options communes aux cibles decaf (reprises de son CMakeLists racine).
 set(DECAF_DEFINITIONS

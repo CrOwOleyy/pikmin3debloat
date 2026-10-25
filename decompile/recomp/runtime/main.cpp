@@ -222,7 +222,15 @@ int main(int argc, char** argv)
         }
     }
 
-    if (!findGameDirs(root) && !findGameDirs(fs::path(PIKMIN3_RECOMP_DIR)))
+    // build/dump_root.txt (écrit par setup.ps1) : dossier contenant les dossiers [Game]/[Update]
+    auto dumpRootFromFile = []() -> fs::path {
+        std::ifstream f(exeDir() / "dump_root.txt");
+        std::string line;
+        if (f && std::getline(f, line) && !line.empty())
+            return fs::u8path(line);
+        return {};
+    };
+    if (!findGameDirs(root) && !findGameDirs(dumpRootFromFile()) && !findGameDirs(fs::path(PIKMIN3_RECOMP_DIR)))
         fatal("dossier « PIKMIN 3 [Game] … » introuvable (option --root)");
     g_saveDir = exeDir() / "save";
     // Sans --record-input ni --replay-input, chaque partie est enregistrée (commandes, tactile)

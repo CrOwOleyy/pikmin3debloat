@@ -1119,3 +1119,27 @@ index 89df9ee..da92795 100644
 +#define PPC_INST_PS_CMPO0    1926
 +#define PPC_INST_PSQ_L       1927
 +#define PPC_INST_PSQ_ST      1928
+diff --git a/thirdparty/fmt b/thirdparty/fmt
+--- a/thirdparty/fmt
++++ b/thirdparty/fmt
+@@ -1 +1 @@
+-Subproject commit 873670ba3f9e7bc77ec2c1c94b04f1f8bef77e9f
++Subproject commit 873670ba3f9e7bc77ec2c1c94b04f1f8bef77e9f-dirty
+diff --git a/thirdparty/libmspack b/thirdparty/libmspack
+--- a/thirdparty/libmspack
++++ b/thirdparty/libmspack
+@@ -1 +1 @@
+-Subproject commit 305907723a4e7ab2018e58040059ffb5e77db837
++Subproject commit 305907723a4e7ab2018e58040059ffb5e77db837-dirty
+diff --git a/thirdparty/tomlplusplus b/thirdparty/tomlplusplus
+--- a/thirdparty/tomlplusplus
++++ b/thirdparty/tomlplusplus
+@@ -1 +1 @@
+-Subproject commit c4369ae1d8955cae20c4ab40b9813ef4b60e48be
++Subproject commit c4369ae1d8955cae20c4ab40b9813ef4b60e48be-dirty
+diff --git a/thirdparty/xxHash b/thirdparty/xxHash
+--- a/thirdparty/xxHash
++++ b/thirdparty/xxHash
+@@ -1 +1 @@
+-Subproject commit 2bf8313b934633b2a5b7e8fd239645b85e10c852
++Subproject commit 2bf8313b934633b2a5b7e8fd239645b85e10c852-dirty

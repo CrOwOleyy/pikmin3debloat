@@ -4,11 +4,16 @@ ghidra/
 recomp/carrot_linked.elf
 recomp/generated/
 recomp/runtime/generated/
-recomp/config/
+recomp/config/*
+!recomp/config/carrot_functions.toml
 recomp/content_override/
 
-# Outils tiers clonés : leurs modifications sont dans patches/*.patch
-tools/
+# Outils tiers : decaf-emu, XenonRecomp et Vulkan-Headers sont des sous-modules (leurs modifications
+# sont dans patches/*.patch, appliquées par setup.ps1) ; le reste est local.
+tools/*
+!tools/decaf-emu
+!tools/XenonRecomp
+!tools/Vulkan-Headers
 
 # Compilation et diagnostics
 recomp/build/
