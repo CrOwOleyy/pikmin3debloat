@@ -688,17 +688,30 @@ index 63fb1d6..b5ae4f7 100644
        case latte::SQ_TEX_DIM::DIM_1D:
        case latte::SQ_TEX_DIM::DIM_1D_ARRAY:
 diff --git a/src/libgpu/src/vulkan/vulkan_display.cpp b/src/libgpu/src/vulkan/vulkan_display.cpp
-index e96b29e..41fd55b 100644
+index e96b29e..5170c8c 100644
 --- a/src/libgpu/src/vulkan/vulkan_display.cpp
 +++ b/src/libgpu/src/vulkan/vulkan_display.cpp
-@@ -1,5 +1,6 @@
+@@ -1,5 +1,7 @@
++#include <atomic>
  #ifdef DECAF_VULKAN
  #include "vulkan_driver.h"
 +#include "vulkan_utils.h"
  #include "vulkan_displayshaders.h"
  
  #include "gpu_config.h"
-@@ -914,7 +915,7 @@ createBuffers(VulkanDisplayPipeline &displayPipeline,
+@@ -19,6 +21,11 @@
+ namespace vulkan
+ {
+ 
++// Recomp : certains pilotes (AMD) ne déclarent pas la swapchain périmée quand la fenêtre change de
++// taille (image figée à l'ancienne taille) ; elle est alors recréée avant la trame suivante.
++static std::atomic<bool> sWindowResized { false };
++
++
+ static VKAPI_ATTR VkBool32 VKAPI_CALL
+ debugMessageCallback(VkDebugReportFlagsEXT flags,
+                      VkDebugReportObjectTypeEXT objectType,
+@@ -914,7 +921,7 @@ createBuffers(VulkanDisplayPipeline &displayPipeline,
                vk::PhysicalDevice &physicalDevice,
                vk::Device &device)
  {
@@ -707,7 +720,7 @@ index e96b29e..41fd55b 100644
        -1.0f,  1.0f,  0.0f,  1.0f,
         1.0f,  1.0f,  1.0f,  1.0f,
         1.0f, -1.0f,  1.0f,  0.0f,
-@@ -923,6 +924,17 @@ createBuffers(VulkanDisplayPipeline &displayPipeline,
+@@ -923,6 +930,17 @@ createBuffers(VulkanDisplayPipeline &displayPipeline,
        -1.0f, -1.0f,  0.0f,  0.0f,
        -1.0f,  1.0f,  0.0f,  1.0f,
     };
@@ -725,6 +738,35 @@ index e96b29e..41fd55b 100644
  
     // Allocate buffer
     auto bufferDesc = vk::BufferCreateInfo { };
+@@ -1242,6 +1260,10 @@ Driver::renderDisplay()
+                                        std::numeric_limits<uint64_t>::max());
+    mDevice.resetFences({ renderFence });
+ 
++   if (sWindowResized.exchange(false)) {
++      recreateSwapchain(mDisplayPipeline, mPhysDevice, mDevice);
++   }
++
+    // Acquire the next frame to render into
+    auto nextSwapImage = uint32_t { 0 };
+    try {
+@@ -1401,6 +1423,8 @@ Driver::renderDisplay()
+ 
+       if (result == vk::Result::eErrorOutOfDateKHR) {
+          recreateSwapchain(mDisplayPipeline, mPhysDevice, mDevice);
++      } else if (result == vk::Result::eSuboptimalKHR) {
++         sWindowResized = true;
+       }
+    }
+ 
+@@ -1415,7 +1439,7 @@ Driver::windowHandleChanged(void *handle)
+ void
+ Driver::windowSizeChanged(int width, int height)
+ {
+-   // Nothing to do, this will be handled during drawing
++   sWindowResized = true;
+ }
+ 
+ } // namespace vulkan
 diff --git a/src/libgpu/src/vulkan/vulkan_draw.cpp b/src/libgpu/src/vulkan/vulkan_draw.cpp
 index a800272..c724ab9 100644
 --- a/src/libgpu/src/vulkan/vulkan_draw.cpp

@@ -492,15 +492,18 @@ Relevés sur les captures en jeu (intro, zone enneigée, appel du communicateur)
    après la cinématique c06) est d'un bleu-violet saturé et opaque, alors qu'elle doit être
    transparente. À examiner avec une capture F12 (`recomp/rdoc.bat`) : shader de l'eau, texture
    de réfraction ou mélange.
-14. **Plantage : appel indirect vers 0x00000000** (2026-10-25, même endroit, juste après l'ouverture
-   du flux `audiores/stream/demo_c06.o.32.dspadpcm.bfstm`) : `[ERREUR] appel indirect vers
-   0x00000000 : aucune fonction (lr=0x031B3FF8, r3=0x00000000)`. Pointeur de fonction nul
-   appelé par le jeu ; à relier peut-être au son (flux de cinématique, callback AX non fourni par
-   decaf ?) ou à un import HLE qui renvoie 0. Premier examen : en 0x031B3FE4, `r10 = *(r30 + 0x30)`
-   puis appel de `*(r10 + 0xEC)` avec r3 = r30 = 0 ; l'objet r30 est donc nul (la page 0 lisible
-   et nulle donne r10 = 0, puis une cible nulle). La fonction incrémente ensuite des compteurs de
-   trame (+0x3C8/+0x3CC) : boucle principale du framework, objet récupéré nul juste après le
-   lancement de la cinématique c06.
+14. ~~Plantage : appel indirect vers 0x00000000~~ (lr=0x031B3FF8, corrigé le 2026-10-25) : les gardes
+   de registres (`probe.cpp`) ont montré que `sub_31B42FC` rendait r28 faux, sa pile ayant été
+   écrasée par du code audio (nw::snd) au pointeur de pile voisin de celui du thread principal. Le
+   thread AX descendait de quelques centaines d'octets par trame : decaf alloue des StackObject
+   sur la pile invitée pendant ses appels au jeu et `cafe::invoke` recopie ce r1 abaissé dans le
+   contexte du thread ; `decafSndRunFrame` ne le restaurait pas. Au bout de quelques minutes la
+   pile AX débordait sur celle du thread d'alarme puis du thread principal. Le contexte est
+   maintenant sauvegardé et restauré autour de chaque trame.
+15. ~~Pas de mise à l'échelle quand la fenêtre est agrandie~~ (corrigé le 2026-10-25) : decaf ne
+   recréait la swapchain que sur `VK_ERROR_OUT_OF_DATE_KHR`, que le pilote AMD ne renvoie pas
+   forcément ; elle est recréée sur `WM_SIZE` et sur `VK_SUBOPTIMAL_KHR` (`vulkan_display.cpp`).
+   `DECAF_TEST_RESIZE=<s>` agrandit la fenêtre après <s> secondes pour le tester.
 
 Outils ajoutés : `DECAF_RDOC_FRAMES=<n>` (avec `--rdoc-capture`) capture n images consécutives ;
 `DECAF_SKIP_PS=<nom du dump>` et `DECAF_SKIP_TEXSIZE=<l>x<h>` sautent des dessins ; `--probe`

@@ -753,13 +753,18 @@ void decafSndRegister()
 // Une trame AX (3 ms) : callbacks du jeu, mixage des voix, envoi à la sortie son.
 void decafSndRunFrame()
 {
+    // Les appels au jeu (cafe::invoke) recopient dans le contexte du thread le r1 abaissé par les
+    // StackObject de decaf : sans restauration, la pile du thread AX descendait à chaque trame
+    // jusqu'à écraser celle du thread principal (plantage « appel indirect vers 0 »).
     PPCContext& ctx = *currentContext();
+    const PPCContext saved = ctx;
     cpu::Core core {};
     contextToCore(ctx, core);
     cpu::Core* previous = t_core;
     t_core = &core;
     cafe::sndcore2::internal::runFrame();
     t_core = previous;
+    ctx = saved;
 }
 
 } // namespace rt

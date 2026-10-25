@@ -252,6 +252,12 @@ void gpuStart()
    tclInit();
    if (g_captureWindow)
       std::thread(captureLoop).detach();
+   // DECAF_TEST_RESIZE=<s> : agrandit la fenêtre à 1700x1000 après <s> secondes (test du redimensionnement)
+   if (const char *resize = getenv("DECAF_TEST_RESIZE"))
+      std::thread([seconds = atoi(resize)] {
+         std::this_thread::sleep_for(std::chrono::seconds(seconds));
+         SetWindowPos(s_window, nullptr, 0, 0, 1700, 1000, SWP_NOZORDER | SWP_NOMOVE);
+      }).detach();
    if (g_rdocCaptureAt)
       std::thread(rdocCaptureLoop, g_rdocCaptureAt).detach();
    RT_INFO("rendu : pilote Vulkan (libgpu de decaf) démarré");
