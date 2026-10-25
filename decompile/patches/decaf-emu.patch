@@ -857,7 +857,7 @@ index a70a959..3778587 100644
  
  void
 diff --git a/src/libgpu/src/vulkan/vulkan_driver.h b/src/libgpu/src/vulkan/vulkan_driver.h
-index c87d31f..a5c9ff5 100644
+index c87d31f..0dad4d4 100644
 --- a/src/libgpu/src/vulkan/vulkan_driver.h
 +++ b/src/libgpu/src/vulkan/vulkan_driver.h
 @@ -176,6 +176,10 @@ struct MemCacheObject
@@ -879,8 +879,17 @@ index c87d31f..a5c9ff5 100644
  
     // CBuffers
     void updateDrawUniformBuffer(ShaderStage shaderStage, uint32_t cbufferIdx);
-@@ -584,6 +589,7 @@ protected:
-    void invalidateMemCacheDelayed(MemCacheObject *cache, uint32_t offset, uint32_t size, const DelayedMemWriteFunc& delayedWriteHandler);
+@@ -577,13 +582,14 @@ protected:
+    void _refreshMemCache_Check(MemCacheObject *cache, SectionRange sections);
+    void _refreshMemCache_Update(MemCacheObject *cache, SectionRange sections);
+    void _refreshMemCache(MemCacheObject *cache, SectionRange sections);
+-   void _invalidateMemCache(MemCacheObject *cache, SectionRange sections, const DelayedMemWriteFunc& delayedWriteHandler);
++   void _invalidateMemCache(MemCacheObject *cache, SectionRange sections, const DelayedMemWriteFunc& delayedWriteHandler, bool cpuReadback = false);
+    void _barrierMemCache(MemCacheObject *cache, ResourceUsage usage, SectionRange sections);
+    SectionRange _sectionsFromOffsets(MemCacheObject *cache, uint32_t begin, uint32_t end);
+    MemCacheObject * getMemCache(phys_addr address, uint32_t numSections, uint32_t sectionSize);
+-   void invalidateMemCacheDelayed(MemCacheObject *cache, uint32_t offset, uint32_t size, const DelayedMemWriteFunc& delayedWriteHandler);
++   void invalidateMemCacheDelayed(MemCacheObject *cache, uint32_t offset, uint32_t size, const DelayedMemWriteFunc& delayedWriteHandler, bool cpuReadback = false);
     void transitionMemCache(MemCacheObject *cache, ResourceUsage usage, uint32_t offset = 0, uint32_t size = 0);
     DataBufferObject * getDataMemCache(phys_addr baseAddress, uint32_t size);
 +   void evictMemCaches();
@@ -896,7 +905,7 @@ index c87d31f..a5c9ff5 100644
     gpu7::tiling::vulkan::Retiler mGpuRetiler;
     DriverMemoryTracker mMemTracker;
 diff --git a/src/libgpu/src/vulkan/vulkan_memcache.cpp b/src/libgpu/src/vulkan/vulkan_memcache.cpp
-index 49ac6e6..df958ee 100644
+index 49ac6e6..0265ad2 100644
 --- a/src/libgpu/src/vulkan/vulkan_memcache.cpp
 +++ b/src/libgpu/src/vulkan/vulkan_memcache.cpp
 @@ -1,5 +1,7 @@
@@ -951,15 +960,33 @@ index 49ac6e6..df958ee 100644
              }
           });
        });
-@@ -357,6 +382,7 @@ Driver::_invalidateMemCache(MemCacheObject *cache, SectionRange range, const Del
+@@ -329,7 +354,7 @@ Driver::_refreshMemCache(MemCacheObject *cache, SectionRange range)
+ }
+ 
+ void
+-Driver::_invalidateMemCache(MemCacheObject *cache, SectionRange range, const DelayedMemWriteFunc& delayedWriteFunc)
++Driver::_invalidateMemCache(MemCacheObject *cache, SectionRange range, const DelayedMemWriteFunc& delayedWriteFunc, bool cpuReadback)
+ {
+    auto changeIndex = mMemTracker.newChangeIndex();
+ 
+@@ -357,12 +382,14 @@ Driver::_invalidateMemCache(MemCacheObject *cache, SectionRange range, const Del
        segment.lastChangeIndex = changeIndex;
        segment.lastChangeOwner = cache;
        segment.gpuWritten = true;
 +      segment.gpuBaselinePending = true;
     });
  
-    if (delayedWriteFunc) {
-@@ -375,7 +401,9 @@ Driver::_barrierMemCache(MemCacheObject *cache, ResourceUsage usage, SectionRang
+-   if (delayedWriteFunc) {
++   if (delayedWriteFunc && !cpuReadback) {
+       // If there is a delayed write, we assume that this must have been a surface transition
+       // that was happening, and we don't want to copy these all back, so lets not mark it
+-      // for download later...
++      // for download later...  Unless the caller expects the CPU to read the result back
++      // (linear surfaces), in which case the download below runs the delayed write first.
+       return;
+    }
+ 
+@@ -375,7 +402,9 @@ Driver::_barrierMemCache(MemCacheObject *cache, ResourceUsage usage, SectionRang
     auto offsetStart = range.start * cache->sectionSize;;
     auto memSize = range.count * cache->sectionSize;
  
@@ -970,7 +997,23 @@ index 49ac6e6..df958ee 100644
        return;
     }
  
-@@ -529,9 +557,111 @@ DataBufferObject *
+@@ -457,13 +486,13 @@ Driver::getMemCache(phys_addr address, uint32_t numSections, uint32_t sectionSiz
+ }
+ 
+ void
+-Driver::invalidateMemCacheDelayed(MemCacheObject *cache, uint32_t offset, uint32_t size, const DelayedMemWriteFunc& delayedWriteHandler)
++Driver::invalidateMemCacheDelayed(MemCacheObject *cache, uint32_t offset, uint32_t size, const DelayedMemWriteFunc& delayedWriteHandler, bool cpuReadback)
+ {
+    // Calculate which sections actually apply to this...
+    auto range = _sectionsFromOffsets(cache, offset, offset + size);
+ 
+    // Perform the invalidation
+-   _invalidateMemCache(cache, range, delayedWriteHandler);
++   _invalidateMemCache(cache, range, delayedWriteHandler, cpuReadback);
+ }
+ 
+ void
+@@ -529,9 +558,111 @@ DataBufferObject *
  Driver::getDataMemCache(phys_addr baseAddress, uint32_t size)
  {
     auto cache = getMemCache(baseAddress, 1, size);
@@ -1195,7 +1238,7 @@ index 7d76227..9bb49c6 100644
        decaf_abort("Unexpected pipeline cull mode");
     }
 diff --git a/src/libgpu/src/vulkan/vulkan_surface.cpp b/src/libgpu/src/vulkan/vulkan_surface.cpp
-index c1da79e..1938b0d 100644
+index c1da79e..c352ace 100644
 --- a/src/libgpu/src/vulkan/vulkan_surface.cpp
 +++ b/src/libgpu/src/vulkan/vulkan_surface.cpp
 @@ -1,5 +1,7 @@
@@ -1328,20 +1371,34 @@ index c1da79e..1938b0d 100644
        if (surface->slices[i].lastChangeIndex >= latestChangeIndex) {
           continue;
        }
-@@ -814,6 +859,12 @@ Driver::_invalidateSurface(SurfaceObject *surface, SurfaceSubRange range)
-       _barrierSurface(surface, oldUsage, oldLayout, range);
-    });
+@@ -803,6 +848,11 @@ Driver::_invalidateSurface(SurfaceObject *surface, SurfaceSubRange range)
  
+    // Mark the memory cache as delayed invalidated, and perform the write
+    // if the memory cache ends up requesting it (sometimes its cancelled).
++   // Linear surfaces written by the GPU are copied back to guest memory at the end of the
++   // command buffer: the CPU can only read that layout, and games do (Pikmin 3 tests its map
++   // icons against a 768x768 fog-of-war mask rendered by the GPU).
++   auto cpuReadback = surface->desc.tileMode == latte::SQ_TILE_MODE::LINEAR_ALIGNED ||
++                      surface->desc.tileMode == latte::SQ_TILE_MODE::DEFAULT;
+    invalidateMemCacheDelayed(memCache, memRange.first, memRange.second, [=](){
+       // We need to be careful to restore the surface layout after we are
+       // done, as this async download could happen mid-draw.
+@@ -812,7 +862,13 @@ Driver::_invalidateSurface(SurfaceObject *surface, SurfaceSubRange range)
+ 
+       auto oldLayout = getResourceUsageMeta(oldUsage).imageLayout;
+       _barrierSurface(surface, oldUsage, oldLayout, range);
+-   });
++   }, cpuReadback);
++
 +   static const char *debugSurf = getenv("DECAF_DEBUG_SURF");
 +   if (debugSurf && surface->desc.width == std::strtoul(debugSurf, nullptr, 10)) {
 +      gLog->info("SURF invalidate {} slices {}+{} mem {:X}+{:X}", _makeSurfaceDescStr(surface->desc), range.firstSlice,
 +                 range.numSlices, memRange.first, memRange.second);
 +   }
-+
+ 
     // Update our last change index to match the data we wrote
     auto sectionRange = _sliceRangeToSectionRange(range);
-    for (auto i = sectionRange.start; i < sectionRange.start + sectionRange.count; ++i) {
-@@ -834,7 +885,11 @@ Driver::_barrierSurface(SurfaceObject *surface, ResourceUsage usage, vk::ImageLa
+@@ -834,7 +890,11 @@ Driver::_barrierSurface(SurfaceObject *surface, ResourceUsage usage, vk::ImageLa
     // actually needs to be for this transition.
     decaf_check(dstMeta.imageLayout == layout);
  
