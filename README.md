@@ -1,3 +1,5 @@
+![Pikmin 3 title screen, running natively on Windows](decompile/recomp/docs/screenshots/title.png)
+
 # Pikmin 3: native Windows port (static recompilation)
 
 A native Windows (x86-64, Vulkan) build of **Pikmin 3** for the Wii U, made by **statically
@@ -5,12 +7,12 @@ recompiling** the game's PowerPC code into C++, together with a reimplementation
 system libraries it needs. No emulator runs in the background: the game code itself is compiled
 for your PC.
 
-![In game: the Onion and the S.S. Drake](decompile/recomp/docs/screenshots/gameplay.png)
-
 | | |
 |---|---|
-| ![Landing on PNF-404](decompile/recomp/docs/screenshots/landing.png) | ![Descent to the planet](decompile/recomp/docs/screenshots/planet.png) |
-| ![Aboard the S.S. Drake](decompile/recomp/docs/screenshots/ship.png) | ![TV and GamePad screens, with the GamePad map](decompile/recomp/docs/screenshots/split_view.png) |
+| ![In game: the Onion and the S.S. Drake](decompile/recomp/docs/screenshots/gameplay.png) | ![Landing on PNF-404](decompile/recomp/docs/screenshots/landing.png) |
+| ![Descent to the planet](decompile/recomp/docs/screenshots/planet.png) | ![Aboard the S.S. Drake](decompile/recomp/docs/screenshots/ship.png) |
+
+![TV and GamePad screens, with the GamePad map](decompile/recomp/docs/screenshots/split_view.png)
 
 > **Legal notice.** This repository contains **no game files** and **no Nintendo code**: no
 > game data, no executable, no recompiled code. You need **your own decrypted dump** of the game
