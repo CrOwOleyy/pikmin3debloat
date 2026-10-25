@@ -266,3 +266,77 @@ void sub_343E98C(PPCContext& __restrict ctx, uint8_t* base)
             row(m + 8).c_str());
     }
 }
+
+// DECAF_PROBE_FRAME : boucle principale du framework (sub_31B3EB8, this = r3). Journalise une fois
+// les méthodes virtuelles appelées (+0x30 : table ; entrées 0x6C, 0xDC, 0xE4, 0xEC, 0xF4).
+extern "C" void __imp__sub_31B3EB8(PPCContext& __restrict ctx, uint8_t* base);
+
+void sub_31B3EB8(PPCContext& __restrict ctx, uint8_t* base)
+{
+    static const bool enabled = getenv("DECAF_PROBE_FRAME") != nullptr;
+    static bool logged = false;
+    const uint32_t self = ctx.r3.u32;
+    if (enabled && !logged)
+    {
+        logged = true;
+        const uint32_t vt = rt::load32(self + 0x30);
+        RT_INFO("FRAME this %08X vtable %08X : 6C %08X DC %08X E4 %08X EC %08X F4 %08X", self, vt,
+            rt::load32(vt + 0x6C), rt::load32(vt + 0xDC), rt::load32(vt + 0xE4), rt::load32(vt + 0xEC), rt::load32(vt + 0xF4));
+    }
+    __imp__sub_31B3EB8(ctx, base);
+}
+
+// Garde des registres non volatils (r14-r31) autour des fonctions appelées par la boucle du
+// framework : une fonction qui les rend modifiés a restauré une pile écrasée (plantage « appel
+// indirect vers 0 », lr=0x031B3FF8). Actif par défaut (coût négligeable) ; journalise la première
+// corruption avec la pile hôte et la pile invitée autour de r1.
+namespace
+{
+void checkNonVolatile(const char* name, const uint32_t (&before)[18], PPCContext& ctx, uint32_t sp)
+{
+    static std::atomic<int> reports { 0 };
+    const PPCRegister* regs[18] = { &ctx.r14, &ctx.r15, &ctx.r16, &ctx.r17, &ctx.r18, &ctx.r19, &ctx.r20, &ctx.r21,
+        &ctx.r22, &ctx.r23, &ctx.r24, &ctx.r25, &ctx.r26, &ctx.r27, &ctx.r28, &ctx.r29, &ctx.r30, &ctx.r31 };
+    for (int i = 0; i < 18; i++)
+        if (regs[i]->u32 != before[i] && reports++ < 4)
+        {
+            RT_ERROR("GARDE : %s a rendu r%d = %08X au lieu de %08X (r1 = %08X, ctx.r1 = %08X)", name, 14 + i,
+                regs[i]->u32, before[i], sp, ctx.r1.u32);
+            std::string dump;
+            for (uint32_t a = sp - 0x100; a < sp + 0x40; a += 4)
+            {
+                char v[16];
+                snprintf(v, sizeof(v), "%s%08X", (a - sp + 0x100) % 32 ? " " : "\n  ", rt::load32(a));
+                dump += v;
+            }
+            RT_ERROR("GARDE : pile invitée %08X..%08X :%s", sp - 0x100, sp + 0x40, dump.c_str());
+            RT_ERROR("GARDE : pile hôte %s", rt::hostStack().c_str());
+            return;
+        }
+}
+}
+
+#define GUARDED(addr)                                                                        \
+    extern "C" void __imp__sub_##addr(PPCContext& __restrict ctx, uint8_t* base);            \
+    void sub_##addr(PPCContext& __restrict ctx, uint8_t* base)                               \
+    {                                                                                        \
+        const PPCRegister* regs[18] = { &ctx.r14, &ctx.r15, &ctx.r16, &ctx.r17, &ctx.r18,    \
+            &ctx.r19, &ctx.r20, &ctx.r21, &ctx.r22, &ctx.r23, &ctx.r24, &ctx.r25, &ctx.r26,  \
+            &ctx.r27, &ctx.r28, &ctx.r29, &ctx.r30, &ctx.r31 };                              \
+        uint32_t before[18];                                                                 \
+        for (int i = 0; i < 18; i++)                                                         \
+            before[i] = regs[i]->u32;                                                        \
+        const uint32_t sp = ctx.r1.u32;                                                      \
+        __imp__sub_##addr(ctx, base);                                                        \
+        checkNonVolatile("sub_" #addr, before, ctx, sp);                                     \
+    }
+
+GUARDED(321222C)
+GUARDED(31B4050)
+GUARDED(31B41A4)
+GUARDED(31B42FC)
+GUARDED(3217280)
+GUARDED(3238B64)
+GUARDED(31B7864)
+GUARDED(31B78D0)
+GUARDED(31CFB74)

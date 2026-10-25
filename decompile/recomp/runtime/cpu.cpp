@@ -1,6 +1,8 @@
 // Table des fonctions invitées, appels indirects, traps et appels runtime -> jeu.
 #include "runtime.h"
 
+#include <string>
+
 #include <cstdio>
 #include <cstdlib>
 #include <mutex>
@@ -98,8 +100,27 @@ void PPCCallIndirect(PPCContext& ctx, uint8_t* base, uint32_t address)
 {
     PPCFunc* fn = rt::findFunction(address);
     if (!fn)
+    {
+        // Contexte pour le diagnostic : chaîne des appelants invités (pile : [r1] = cadre
+        // précédent, LR sauvegardé en +4 du cadre de l'appelant) et pile hôte.
+        std::string chain;
+        uint32_t sp = ctx.r1.u32;
+        for (int depth = 0; depth < 16 && sp >= 0x10000 && sp < 0xF0000000u; depth++)
+        {
+            const uint32_t next = rt::load32(sp);
+            if (next <= sp)
+                break;
+            char v[16];
+            snprintf(v, sizeof(v), " %08X", rt::load32(next + 4));
+            chain += v;
+            sp = next;
+        }
+        RT_ERROR("appel indirect nul : r1=%08X r30=%08X r31=%08X, appelants invités :%s", ctx.r1.u32, ctx.r30.u32,
+            ctx.r31.u32, chain.c_str());
+        RT_ERROR("pile hôte : %s", rt::hostStack().c_str());
         rt::fatal("appel indirect vers 0x%08X : aucune fonction (lr=0x%08X, r3=0x%08X)",
             address, uint32_t(ctx.lr), ctx.r3.u32);
+    }
     rt::t_indirectTarget = address;
     fn(ctx, base);
 }
