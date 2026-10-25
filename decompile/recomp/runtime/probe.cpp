@@ -9,6 +9,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdlib>
+#include <map>
 #include <mutex>
 #include <unordered_map>
 #include <cstring>
@@ -383,11 +384,11 @@ void sub_317DA24(PPCContext& __restrict ctx, uint8_t* base)
 // puissances de 10.
 std::atomic<uint32_t> g_radarThis { 0 }; // objet RadarIcon_00 (this vu par sub_2F393EC)
 
-#define COUNTED_IF(addr, cond)                                                               \
+#define COUNTED_IF_ALWAYS(addr, cond, always)                                                              \
     extern "C" void __imp__sub_##addr(PPCContext& __restrict ctx, uint8_t* base);            \
     void sub_##addr(PPCContext& __restrict ctx, uint8_t* base)                               \
     {                                                                                        \
-        static const bool enabled = getenv("DECAF_COUNT_CALLS") != nullptr;                  \
+        static const bool enabled = getenv("DECAF_COUNT_CALLS") != nullptr || always;               \
         static std::atomic<uint32_t> calls { 0 };                                            \
         if (enabled && (cond))                                                               \
         {                                                                                    \
@@ -397,6 +398,7 @@ std::atomic<uint32_t> g_radarThis { 0 }; // objet RadarIcon_00 (this vu par sub_
         }                                                                                    \
         __imp__sub_##addr(ctx, base);                                                        \
     }
+#define COUNTED_IF(addr, cond) COUNTED_IF_ALWAYS(addr, cond, false)
 #define COUNTED(addr) COUNTED_IF(addr, true)
 #define COUNTED_THIS(addr) COUNTED_IF(addr, ctx.r3.u32 == g_radarThis.load())
 
@@ -531,6 +533,47 @@ void sub_2F40904(PPCContext& __restrict ctx, uint8_t* base)
             RT_INFO("RADAR %s @%08X :%s", label, addr, text.c_str());
         };
         dump("this+1360", self + 1360, 8);
+        const uint32_t replay = rt::load32(self + 3700);
+        RT_INFO("RADAR replayMgr %08X : en replay (+364) = %u, carte visible (+3452) = %u, +1364 = %u", replay,
+            replay ? base[replay + 364] : 0, base[self + 3452], base[self + 1364]);
+        for (uint32_t off : { 3904u, 8524u, 10632u })
+        {
+            const uint32_t pool = rt::load32(self + off);
+            if (pool < 0x10000000 || pool >= 0x50000000)
+                continue;
+            const uint32_t entries = rt::load32(pool + 284);
+            RT_INFO("RADAR réserve +%u : %u tampon(s), courant %u, éléments du tampon 0 = %u", off, rt::load32(pool + 280),
+                rt::load32(pool + 316), entries ? rt::load32(entries + 12) : 0);
+        }
+        {
+            std::map<uint32_t, uint32_t> kinds; // fonction « visible ? » (vtable+60) -> nombre de cibles
+            std::string first;
+            for (uint32_t i = 0; i < 100; i++)
+            {
+                const uint32_t target = rt::load32(self + 9708 + i * 4);
+                if (target < 0x10000000 || target >= 0x50000000)
+                {
+                    kinds[0]++;
+                    continue;
+                }
+                const uint32_t tvt = rt::load32(target);
+                kinds[rt::load32(tvt + 60)]++;
+                if (i < 12)
+                {
+                    char v[48];
+                    snprintf(v, sizeof(v), " %08X(vt %08X)", target, tvt);
+                    first += v;
+                }
+            }
+            std::string text;
+            for (auto& [fn, n] : kinds)
+            {
+                char v[32];
+                snprintf(v, sizeof(v), " %08X x%u", fn, n);
+                text += v;
+            }
+            RT_INFO("RADAR cibles (+9708) : visible?(vt+60) :%s ; premières :%s", text.c_str(), first.c_str());
+        }
         for (uint32_t i = 0; i < 4; i++)
         {
             const uint32_t pane = rt::load32(self + 1364 + i * 4);
@@ -573,3 +616,6 @@ COUNTED(2F3D6A0)
 COUNTED(2F36548)
 COUNTED(2F36534)
 COUNTED(2F392A0)
+
+// Ajout d'une icône dans la réserve de la carte du GamePad : compté en permanence (diagnostic)
+COUNTED_IF_ALWAYS(2F3C0B0, true, true)
