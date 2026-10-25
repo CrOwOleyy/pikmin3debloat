@@ -74,6 +74,10 @@ void captureLoop()
    }
 }
 
+} // namespace
+namespace rt { void rdocCaptureNow(); }
+namespace {
+
 LRESULT CALLBACK windowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 {
    switch (msg)
@@ -82,6 +86,11 @@ LRESULT CALLBACK windowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
       if (s_driver)
          s_driver->windowSizeChanged(LOWORD(lparam), HIWORD(lparam));
       return 0;
+   case WM_KEYDOWN:
+      // F12 : capture RenderDoc de l'image suivante (jeu lancé sous RenderDoc), dans recomp/rdoc
+      if (wparam == VK_F12)
+         rt::rdocCaptureNow();
+      break;
    case WM_CLOSE:
       RT_INFO("fenêtre fermée : arrêt");
       ExitProcess(0);
@@ -133,9 +142,23 @@ static void **rdocApi()
       RT_WARN("RenderDoc absent : lancer avec VK_LAYER_PATH=<dossier RenderDoc> VK_INSTANCE_LAYERS=VK_LAYER_RENDERDOC_Capture");
       return nullptr;
    }
-   CreateDirectoryW(L"rdoc", nullptr);
-   reinterpret_cast<void (*)(const char *)>(api[11])("rdoc/pikmin3");
+   // Dossier recomp/rdoc à côté de build/ (quel que soit le dossier courant)
+   char exe[MAX_PATH];
+   GetModuleFileNameA(nullptr, exe, MAX_PATH);
+   std::string dir = exe;
+   dir = dir.substr(0, dir.find_last_of("\\/"));
+   dir = dir.substr(0, dir.find_last_of("\\/")) + "/rdoc";
+   CreateDirectoryA(dir.c_str(), nullptr);
+   reinterpret_cast<void (*)(const char *)>(api[11])((dir + "/pikmin3").c_str());
    return api;
+}
+
+void rdocCaptureNow()
+{
+   if (auto api = rdocApi()) {
+      reinterpret_cast<void (*)()>(api[15])(); // TriggerCapture
+      RT_INFO("RenderDoc : capture demandée (F12)");
+   }
 }
 
 static void rdocCaptureLoop(uint32_t seconds)
