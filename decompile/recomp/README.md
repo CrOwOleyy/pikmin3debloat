@@ -484,6 +484,15 @@ Relevés sur les captures en jeu (intro, zone enneigée, appel du communicateur)
    Sortie waveOut 48 kHz stéréo (`gpu/bridge/sound_out.cpp`, tampons de 10 ms, au plus 80 ms
    d'avance) ; `--no-sound` ou `DECAF_NO_SOUND` la coupent. Pas encore gérés : filtres de voix
    (LPF, biquad), son du GamePad (mixé puis ignoré par decaf), DRCVS.
+13. **Eau violette opaque** (2026-10-25, retour de test) : la rivière sous le tronc (zone enneigée,
+   après la cinématique c06) est d'un bleu-violet saturé et opaque, alors qu'elle doit être
+   transparente. À examiner avec une capture F12 (`recomp/rdoc.bat`) : shader de l'eau, texture
+   de réfraction ou mélange.
+14. **Plantage : appel indirect vers 0x00000000** (2026-10-25, même endroit, juste après l'ouverture
+   du flux `audiores/stream/demo_c06.o.32.dspadpcm.bfstm`) : `[ERREUR] appel indirect vers
+   0x00000000 : aucune fonction (lr=0x031B3FF8, r3=0x00000000)`. Pointeur de fonction nul
+   appelé par le jeu ; à relier peut-être au son (flux de cinématique, callback AX non fourni par
+   decaf ?) ou à un import HLE qui renvoie 0.
 
 Outils ajoutés : `DECAF_RDOC_FRAMES=<n>` (avec `--rdoc-capture`) capture n images consécutives ;
 `DECAF_SKIP_PS=<nom du dump>` et `DECAF_SKIP_TEXSIZE=<l>x<h>` sautent des dessins ; `--probe`
