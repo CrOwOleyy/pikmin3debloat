@@ -492,7 +492,11 @@ Relevés sur les captures en jeu (intro, zone enneigée, appel du communicateur)
    du flux `audiores/stream/demo_c06.o.32.dspadpcm.bfstm`) : `[ERREUR] appel indirect vers
    0x00000000 : aucune fonction (lr=0x031B3FF8, r3=0x00000000)`. Pointeur de fonction nul
    appelé par le jeu ; à relier peut-être au son (flux de cinématique, callback AX non fourni par
-   decaf ?) ou à un import HLE qui renvoie 0.
+   decaf ?) ou à un import HLE qui renvoie 0. Premier examen : en 0x031B3FE4, `r10 = *(r30 + 0x30)`
+   puis appel de `*(r10 + 0xEC)` avec r3 = r30 = 0 ; l'objet r30 est donc nul (la page 0 lisible
+   et nulle donne r10 = 0, puis une cible nulle). La fonction incrémente ensuite des compteurs de
+   trame (+0x3C8/+0x3CC) : boucle principale du framework, objet récupéré nul juste après le
+   lancement de la cinématique c06.
 
 Outils ajoutés : `DECAF_RDOC_FRAMES=<n>` (avec `--rdoc-capture`) capture n images consécutives ;
 `DECAF_SKIP_PS=<nom du dump>` et `DECAF_SKIP_TEXSIZE=<l>x<h>` sautent des dessins ; `--probe`
