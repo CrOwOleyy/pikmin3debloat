@@ -145,13 +145,20 @@ Run git @("-C", (Join-Path $Tools "decaf-emu"), "submodule", "update", "--init",
     "libraries/glslang", "libraries/gsl-lite", "libraries/spdlog")
 Run git @("-C", (Join-Path $Tools "XenonRecomp"), "submodule", "update", "--init", "--recursive")
 
+# Exit code of a command whose failure is expected (Windows PowerShell 5.1 turns native stderr
+# output into errors that would stop the script).
+function ExitCode([string]$command) {
+    & cmd /c "$command >nul 2>nul"
+    return $LASTEXITCODE
+}
+
 foreach ($name in @("decaf-emu", "XenonRecomp")) {
     $repo = Join-Path $Tools $name
     $patch = Join-Path $Here "patches\$name.patch"
-    & git -C $repo apply --check --reverse --ignore-whitespace $patch 2>$null
-    if ($LASTEXITCODE -eq 0) { Info "$name.patch already applied"; continue }
-    & git -C $repo apply --check --ignore-whitespace $patch
-    if ($LASTEXITCODE -ne 0) {
+    if ((ExitCode "git -C `"$repo`" apply --check --reverse --ignore-whitespace `"$patch`"") -eq 0) {
+        Info "$name.patch already applied"; continue
+    }
+    if ((ExitCode "git -C `"$repo`" apply --check --ignore-whitespace `"$patch`"") -ne 0) {
         Fail "patches\$name.patch does not apply to tools\$name. Reset that folder with 'git -C decompile/tools/$name checkout -- .' and run setup again."
     }
     Run git @("-C", $repo, "apply", "--ignore-whitespace", $patch)
@@ -162,7 +169,8 @@ foreach ($name in @("decaf-emu", "XenonRecomp")) {
 Step "Preparing the game code (carrot.rpx)"
 
 $extracted = Join-Path $Here "extracted"
-New-Item -ItemType Directory -Force $extracted, (Join-Path $Recomp "config"), (Join-Path $Recomp "runtime\generated") | Out-Null
+New-Item -ItemType Directory -Force $extracted, (Join-Path $Recomp "config"), (Join-Path $Recomp "runtime\generated"),
+    (Join-Path $Recomp "generated") | Out-Null
 $elf = Join-Path $extracted "carrot.elf"
 $linked = Join-Path $Recomp "carrot_linked.elf"
 $functions = Join-Path $Recomp "config\carrot_functions.toml"

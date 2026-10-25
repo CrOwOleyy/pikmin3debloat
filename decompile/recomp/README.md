@@ -591,6 +591,8 @@ Outils de diagnostic (variables d'environnement) :
 
 ## Build Windows
 
+**Installation en une commande : `setup.bat` à la racine du dépôt** (voir le `README.md` principal, en anglais) : il fait toutes les étapes ci-dessous à partir de son propre dump. Détail manuel :
+
 Prérequis : VS 2022 (MSVC + SDK), LLVM/clang-cl, CMake, Ninja, Python 3 (+ `capstone` pour les
 scripts d'inspection seulement).
 
