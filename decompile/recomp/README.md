@@ -515,8 +515,8 @@ Relevés sur les captures en jeu (intro, zone enneigée, appel du communicateur)
    recréait la swapchain que sur `VK_ERROR_OUT_OF_DATE_KHR`, que le pilote AMD ne renvoie pas
    forcément ; elle est recréée sur `WM_SIZE` et sur `VK_SUBOPTIMAL_KHR` (`vulkan_display.cpp`).
    `DECAF_TEST_RESIZE=<s>` agrandit la fenêtre après <s> secondes pour le tester.
-16. **Aucune icône sur la carte du GamePad** (SS Drake, joueurs, Oignon ; corrigé le 2026-10-25, à
-   confirmer en jeu) : chaque image, l'écran radar (`sub_2F3D76C`) remplit ses réserves d'icônes
+16. ~~Aucune icône sur la carte du GamePad~~ (SS Drake, joueurs, Oignon ; corrigé le 2026-10-25,
+   confirmé en jeu) : chaque image, l'écran radar (`sub_2F3D76C`) remplit ses réserves d'icônes
    (`sub_2F3C290` → `sub_2F3C0B0`), mais chaque icône passe d'abord un test de brouillard
    (`sub_2F252E0` → `sub_2F2F518`) : le CPU lit le canal rouge d'un masque RGBA8 768×768 de zone
    découverte, et cache l'icône au-dessus de 0,85. Ce masque est une **cible de rendu dessinée
