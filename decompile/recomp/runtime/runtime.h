@@ -106,6 +106,9 @@ void watchRange(uint32_t addr, uint32_t size, uint32_t maxHits, const char* labe
 std::string hostStack(); // pile d'appels hôte symbolisée (watch.cpp)
 void findGuestString(const char* text, uint32_t skipBegin, uint32_t skipEnd); // watch.cpp
 void requestRadarProbe(); // probe.cpp (F11)
+void freecamStart(); // freecam.cpp
+void toggleFreecam(); // freecam.cpp (F9)
+bool freecamActive(); // freecam.cpp : le jeu ne reçoit alors plus de commandes
 void requestDrawChains(); // gpu/bridge/decaf_bridge.cpp (F11)
 extern std::string g_traceFilter; // --trace-filter : ne trace que les imports contenant ce texte
 extern bool g_recordHle;          // --record <filtre> : enregistre en mémoire, vidé par --dump

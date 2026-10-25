@@ -169,6 +169,8 @@ GamePadInput inputSampleGamePad()
         else if (phase == 2)
             in.leftX = -1.0f;
     }
+    if (freecamActive()) // caméra libre (F9) : le clavier et la manette pilotent la caméra
+        return GamePadInput {};
     const HWND window = s_window.load();
     if (window && GetForegroundWindow() == window)
     {

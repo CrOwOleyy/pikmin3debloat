@@ -75,7 +75,7 @@ void captureLoop()
 }
 
 } // namespace
-namespace rt { void rdocCaptureNow(); void requestRadarProbe(); void requestDrawChains(); void toggleRadarFog(); }
+namespace rt { void rdocCaptureNow(); void requestRadarProbe(); void requestDrawChains(); void toggleRadarFog(); void toggleFreecam(); }
 namespace {
 
 LRESULT CALLBACK windowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
@@ -91,6 +91,9 @@ LRESULT CALLBACK windowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
       if (wparam == VK_F12)
          rt::rdocCaptureNow();
       // F11 : journal de diagnostic de la carte du GamePad (panneaux lyt, chaînes d'appel des draws)
+      // F9 : caméra libre
+      if (wparam == VK_F9)
+         rt::toggleFreecam();
       // F10 (essai) : icônes de la carte du GamePad affichées même sous le brouillard
       if (wparam == VK_F10)
          rt::toggleRadarFog();

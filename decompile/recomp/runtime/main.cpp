@@ -254,6 +254,7 @@ int main(int argc, char** argv)
         const char* comma = strchr(watch, ',');
         watchRange(uint32_t(strtoul(watch, nullptr, 16)), comma ? uint32_t(strtoul(comma + 1, nullptr, 0)) : 4, 20, "DECAF_WATCH_ADDR");
     }
+    freecamStart();
     decafGx2Register();
     decafSndRegister();
     gpuStart();

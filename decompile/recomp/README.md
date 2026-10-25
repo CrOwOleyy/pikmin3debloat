@@ -364,6 +364,15 @@ La sonde `--probe` journalise chaque `GX2SetViewport` distinct.
   même numéro (retour aux vraies commandes à la fin). Sert à revenir à l'endroit d'un bug signalé ;
   le jeu n'étant pas parfaitement déterministe ici, le rejeu peut dériver. Sans ces options, chaque
   partie est enregistrée automatiquement dans `build/inputs/partie_<date>_<heure>.txt`.
+- **F9 : caméra libre** (`runtime/freecam.cpp`). Part de la caméra du jeu ; WASD (ZQSD en AZERTY,
+  ce sont des positions physiques) pour avancer et se décaler, E/Q pour monter et descendre, IJKL
+  ou clic droit maintenu + souris pour regarder, Maj pour aller vite ; le jeu ne reçoit plus de
+  commandes tant qu'elle est active. Elle écrit position et point visé dans la caméra sead
+  « regarder vers » du jeu (`sub_32198D4` : position +52, visée +64, haut +76) juste avant le calcul
+  de sa matrice, repérée par la vue d'index 0 distribuée au rendu (`sub_304D264`). Le jeu ne
+  charge et n'anime peut-être que ce qui est proche du capitaine. Tests sans clavier :
+  `DECAF_FREECAM_AT=<s>` (activation), `DECAF_FREECAM_DEMO` (rotation et montée automatiques) ;
+  `DECAF_CAM_SCAN=<s>` cherche les caméras en mémoire, `DECAF_CAM_PROBE=<s>` journalise les vues.
 - **F11** (carte du GamePad) : au prochain dessin de la carte, journalise chaque panneau lyt visité
   (profondeur, nom, visibilité, alpha, position) et les chaînes d'appel des 4000 draws suivants
   (`RADAR …` et `DRAW …` dans `pikmin3.log`). Mêmes journaux au bout de `<s>` secondes avec
