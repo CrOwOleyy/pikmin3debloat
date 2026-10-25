@@ -340,3 +340,157 @@ GUARDED(3238B64)
 GUARDED(31B7864)
 GUARDED(31B78D0)
 GUARDED(31CFB74)
+
+// DECAF_PROBE_SECTION : création d'une section du jeu par son nom (sub_317DA24, r4 = paramètres,
+// nom de la section en SafeString à +36). Journalise les chaînes trouvées dans les paramètres.
+extern "C" void __imp__sub_317DA24(PPCContext& __restrict ctx, uint8_t* base);
+
+void sub_317DA24(PPCContext& __restrict ctx, uint8_t* base)
+{
+    static const bool enabled = getenv("DECAF_PROBE_SECTION") != nullptr;
+    if (enabled)
+    {
+        const uint32_t args = ctx.r4.u32;
+        std::string text;
+        for (uint32_t off = 0; off < 0x100; off += 4)
+        {
+            const uint32_t v = rt::load32(args + off);
+            char word[64];
+            snprintf(word, sizeof(word), " +%02X=%08X", off, v);
+            text += word;
+            if (v >= 0x10000000 && v < 0x50000000 && base[v] >= 0x20 && base[v] < 0x7F)
+                text += "\"" + std::string(reinterpret_cast<const char*>(base + v), strnlen(reinterpret_cast<const char*>(base + v), 40)) + "\"";
+        }
+        RT_INFO("SECTION r5=%08X lr=%08X%s", ctx.r5.u32, ctx.lr, text.c_str());
+        const uint32_t param = rt::load32(args + 0x0C);
+        std::string ptext;
+        for (uint32_t off = 0; off < 0x200 && param; off += 4)
+        {
+            const uint32_t v = rt::load32(param + off);
+            char word[32];
+            snprintf(word, sizeof(word), " +%02X=%08X", off, v);
+            ptext += word;
+            if (base[param + off] >= 0x41 && base[param + off] < 0x7B)
+                ptext += "'" + std::string(reinterpret_cast<const char*>(base + param + off), strnlen(reinterpret_cast<const char*>(base + param + off), 24)) + "'";
+        }
+        RT_INFO("SECTION param %08X%s", param, ptext.c_str());
+    }
+    __imp__sub_317DA24(ctx, base);
+}
+
+// DECAF_COUNT_CALLS : compte les appels de quelques fonctions (méthodes du layout RadarIcon_00,
+// vtable 0x1032F970 ; méthodes héritées comptées pour cet objet seulement) et journalise aux
+// puissances de 10.
+std::atomic<uint32_t> g_radarThis { 0 }; // objet RadarIcon_00 (this vu par sub_2F393EC)
+
+#define COUNTED_IF(addr, cond)                                                               \
+    extern "C" void __imp__sub_##addr(PPCContext& __restrict ctx, uint8_t* base);            \
+    void sub_##addr(PPCContext& __restrict ctx, uint8_t* base)                               \
+    {                                                                                        \
+        static const bool enabled = getenv("DECAF_COUNT_CALLS") != nullptr;                  \
+        static std::atomic<uint32_t> calls { 0 };                                            \
+        if (enabled && (cond))                                                               \
+        {                                                                                    \
+            const uint32_t n = ++calls;                                                      \
+            if (n == 1 || n == 10 || n == 100 || n == 1000 || n == 10000)                    \
+                RT_INFO("APPELS sub_" #addr " : %u (this %08X, lr %08X)", n, ctx.r3.u32, uint32_t(ctx.lr)); \
+        }                                                                                    \
+        __imp__sub_##addr(ctx, base);                                                        \
+    }
+#define COUNTED(addr) COUNTED_IF(addr, true)
+#define COUNTED_THIS(addr) COUNTED_IF(addr, ctx.r3.u32 == g_radarThis.load())
+
+COUNTED(2F36C08)
+COUNTED(2F36C60)
+COUNTED(2F39344)
+COUNTED(2F40E30)
+COUNTED(2F40E34)
+COUNTED(2F3DDE4)
+COUNTED(2F41308)
+COUNTED_IF(2F393EC, (g_radarThis.store(ctx.r3.u32), true))
+COUNTED_THIS(30B47C4)
+COUNTED_THIS(30B432C)
+COUNTED_THIS(30B335C)
+COUNTED_THIS(30B339C)
+COUNTED_THIS(30B2BD0)
+COUNTED_THIS(30B2D68)
+COUNTED_THIS(30B2EB4)
+COUNTED_THIS(30B2FA4)
+COUNTED_THIS(30B528C)
+COUNTED_THIS(30B3008)
+COUNTED_THIS(30B33F8)
+COUNTED_THIS(30B5290)
+COUNTED_THIS(30B3614)
+COUNTED_THIS(30B3798)
+COUNTED_THIS(30B37F0)
+COUNTED_THIS(30B3800)
+COUNTED_THIS(30B3810)
+COUNTED_THIS(30B38AC)
+COUNTED_THIS(30B5298)
+COUNTED_THIS(30B38BC)
+COUNTED_THIS(30B393C)
+COUNTED_THIS(30B39BC)
+COUNTED_THIS(30B3A3C)
+COUNTED_THIS(30B3AEC)
+COUNTED_THIS(30B3B38)
+COUNTED_THIS(30B3B84)
+COUNTED_THIS(30B3BC8)
+COUNTED_THIS(30B3C0C)
+COUNTED_THIS(30B3C8C)
+
+// DECAF_PROBE_RADAR=<s> : <s> secondes après le démarrage, pendant un dessin de la carte du
+// GamePad (sub_2F3DAE4), journalise chaque panneau lyt visité par nw::lyt::Pane::Draw
+// (sub_3454128) : nom, drapeaux (+68, bit 0 = visible), alpha (+69, +70), 16 flottants.
+namespace
+{
+std::atomic<int> s_radarDepth { 0 };
+std::atomic<bool> s_radarLogged { false };
+std::atomic<bool> s_radarLogging { false };
+}
+extern "C" void __imp__sub_2F3DAE4(PPCContext& __restrict ctx, uint8_t* base);
+extern "C" void __imp__sub_3454128(PPCContext& __restrict ctx, uint8_t* base);
+
+void sub_2F3DAE4(PPCContext& __restrict ctx, uint8_t* base)
+{
+    static const char* env = getenv("DECAF_PROBE_RADAR");
+    static const auto start = std::chrono::steady_clock::now() + std::chrono::seconds(env ? atoi(env) : 0);
+    const bool log = env && !s_radarLogged && std::chrono::steady_clock::now() >= start;
+    if (log)
+        s_radarLogging = true;
+    __imp__sub_2F3DAE4(ctx, base);
+    if (log)
+    {
+        s_radarLogging = false;
+        s_radarLogged = true;
+    }
+}
+
+void sub_3454128(PPCContext& __restrict ctx, uint8_t* base)
+{
+    if (s_radarLogging)
+    {
+        const uint32_t pane = ctx.r3.u32;
+        std::string name;
+        for (uint32_t off = 0x48; off < 0xC0 && name.empty(); off++)
+        {
+            const char* s = reinterpret_cast<const char*>(base + pane + off);
+            if ((s[0] == 'N' || s[0] == 'P' || s[0] == 'R' || s[0] == 'B') && s[1] == '_' && s[2] >= 'A' && s[2] <= 'z')
+                name = std::string(s, strnlen(s, 24)) + "@+" + std::to_string(off);
+        }
+        if (name.empty() && !strncmp(reinterpret_cast<const char*>(base + pane + 0x54), "RootPane", 8))
+            name = "RootPane";
+        std::string floats;
+        for (uint32_t off = 0x18; off < 0x58; off += 4)
+        {
+            uint32_t u = rt::load32(pane + off);
+            float f;
+            memcpy(&f, &u, 4);
+            char v[24];
+            snprintf(v, sizeof(v), " %g", f);
+            floats += v;
+        }
+        RT_INFO("RADAR pane %08X %-28s drap %02X alpha %u/%u f :%s", pane, name.c_str(), base[pane + 68], base[pane + 69],
+            base[pane + 70], floats.c_str());
+    }
+    __imp__sub_3454128(ctx, base);
+}

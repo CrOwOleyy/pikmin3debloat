@@ -488,7 +488,7 @@ Relevés sur les captures en jeu (intro, zone enneigée, appel du communicateur)
    Sortie waveOut 48 kHz stéréo (`gpu/bridge/sound_out.cpp`, tampons de 10 ms, au plus 80 ms
    d'avance) ; `--no-sound` ou `DECAF_NO_SOUND` la coupent. Pas encore gérés : filtres de voix
    (LPF, biquad), son du GamePad (mixé puis ignoré par decaf), DRCVS.
-13. ~~Eau violette opaque~~ (corrigé le 2026-10-25, à confirmer en jeu) : l'eau (étang, rivière
+13. ~~Eau violette opaque~~ (corrigé le 2026-10-25, confirmé en jeu) : l'eau (étang, rivière
    sous le tronc) était d'un bleu-violet saturé. Le shader de l'eau (capture F12, draw 2620,
    débogué pixel par pixel dans RenderDoc) est traduit fidèlement : la réfraction (copie de la
    scène) et l'absorption sont justes, mais il ajoute un reflet planaire lu dans une cible

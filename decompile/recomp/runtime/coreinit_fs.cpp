@@ -94,6 +94,28 @@ void fillStat(uint32_t stat, const fs::path& path)
 int32_t openFile(const std::string& guestPath, const std::string& mode, uint32_t outHandle)
 {
     const bool write = mode.find_first_of("wa+") != std::string::npos;
+    // DECAF_TRACE_OPEN=<sous-chaîne> : chaîne des appelants invités des ouvertures correspondantes
+    static const char* traceOpen = getenv("DECAF_TRACE_OPEN");
+    if (traceOpen && guestPath.find(traceOpen) != std::string::npos)
+        if (PPCContext* ctx = currentContext())
+        {
+            std::string chain;
+            uint32_t sp = ctx->r1.u32;
+            for (int depth = 0; depth < 24 && sp >= 0x10000 && sp < 0xF0000000u; depth++)
+            {
+                const uint32_t next = load32(sp);
+                if (next <= sp)
+                    break;
+                char v[16];
+                snprintf(v, sizeof(v), " %08X", load32(next + 4));
+                chain += v;
+                sp = next;
+            }
+            RT_INFO("FSOpenFile %s : appelants invités%s", guestPath.c_str(), chain.c_str());
+            // DECAF_FIND_STR=<chaîne> : où cette chaîne se trouve en mémoire à ce moment-là
+            if (const char* find = getenv("DECAF_FIND_STR"))
+                findGuestString(find, 0x02000000, 0x10570000);
+        }
     const fs::path host = resolve(guestPath, write);
     if (host.empty())
     {

@@ -235,6 +235,12 @@ int main(int argc, char** argv)
     kernel::setSdaBases(g_image.sdaBase, g_image.sda2Base);
     memHeapsInit((g_image.dataEnd + 0xFFFF) & ~0xFFFFu);
     hleInit();
+    // DECAF_WATCH_ADDR=<adresse hex>[,taille] : journalise les écritures dès le démarrage (watch.cpp)
+    if (const char* watch = getenv("DECAF_WATCH_ADDR"))
+    {
+        const char* comma = strchr(watch, ',');
+        watchRange(uint32_t(strtoul(watch, nullptr, 16)), comma ? uint32_t(strtoul(comma + 1, nullptr, 0)) : 4, 20, "DECAF_WATCH_ADDR");
+    }
     decafGx2Register();
     decafSndRegister();
     gpuStart();

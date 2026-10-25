@@ -204,8 +204,45 @@ bool guardSetGeometryShader(PPCContext& ctx)
 
 std::atomic<uint32_t> s_probeTarget { 0 }; // image de la cible de couleur 0 liée (--probe)
 
+// DECAF_DRAW_CHAINS=<s> : <s> secondes après le démarrage, journalise les chaînes d'appelants
+// invités (8 niveaux) des 4000 draws suivants, regroupées avec leur nombre (diagnostic).
+void logDrawChains(PPCContext& ctx)
+{
+    static const char* env = getenv("DECAF_DRAW_CHAINS");
+    if (!env)
+        return;
+    static const auto start = std::chrono::steady_clock::now() + std::chrono::seconds(atoi(env));
+    static std::mutex lock;
+    static std::map<std::string, uint32_t> chains;
+    static uint32_t seen = 0;
+    if (std::chrono::steady_clock::now() < start)
+        return;
+    std::lock_guard guard(lock);
+    if (seen > 4000)
+        return;
+    std::string chain;
+    char v[16];
+    snprintf(v, sizeof(v), "%08X", uint32_t(ctx.lr));
+    chain += v;
+    uint32_t sp = ctx.r1.u32;
+    for (int depth = 0; depth < 8 && sp >= 0x10000 && sp < 0xF0000000u; depth++)
+    {
+        const uint32_t next = rt::load32(sp);
+        if (next <= sp)
+            break;
+        snprintf(v, sizeof(v), " %08X", rt::load32(next + 4));
+        chain += v;
+        sp = next;
+    }
+    chains[chain]++;
+    if (++seen == 4000)
+        for (auto& [c, n] : chains)
+            RT_INFO("DRAW %5u : %s", n, c.c_str());
+}
+
 bool guardDraw(PPCContext& ctx)
 {
+    logDrawChains(ctx);
     if (rt::g_probe)
     {
         static std::mutex lock;

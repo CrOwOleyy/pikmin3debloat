@@ -120,3 +120,33 @@ void watchRange(uint32_t addr, uint32_t size, uint32_t maxHits, const char* labe
 }
 
 } // namespace rt
+
+namespace rt
+{
+
+// Recherche d'une chaîne (avec son zéro final) dans la mémoire invitée engagée, hors image ELF :
+// journalise chaque adresse avec les 16 octets qui la précèdent (diagnostic).
+void findGuestString(const char* text, uint32_t skipBegin, uint32_t skipEnd)
+{
+    const size_t len = strlen(text) + 1;
+    uint8_t* const base = ptr(0);
+    for (uint64_t addr = 0x10000; addr < 0x100000000ull;)
+    {
+        MEMORY_BASIC_INFORMATION info;
+        if (!VirtualQuery(base + addr, &info, sizeof(info)))
+            break;
+        const uint64_t end = uint64_t(static_cast<uint8_t*>(info.BaseAddress) - base) + info.RegionSize;
+        if (info.State == MEM_COMMIT && !(info.Protect & (PAGE_GUARD | PAGE_NOACCESS)))
+            for (uint64_t a = addr; a + len <= end; a++)
+                if (base[a] == uint8_t(text[0]) && !memcmp(base + a, text, len) && (a < skipBegin || a >= skipEnd))
+                {
+                    char context[80] = {};
+                    for (int i = 0; i < 16; i++)
+                        snprintf(context + i * 3, 4, "%02X ", base[a - 16 + i]);
+                    RT_INFO("chaîne « %s » en %08X (avant : %s)", text, uint32_t(a), context);
+                }
+        addr = end;
+    }
+}
+
+} // namespace rt
