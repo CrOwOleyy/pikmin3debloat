@@ -31,6 +31,10 @@ alu(
  ["x: AND_INT R4.z, R4.w, 0x7F", "y: AND_INT R12.y, R4.w, 0x80"],
  ["x: AND_INT R4.y, R4.y, R4.x", "y: AND_INT R4.z, R4.z, R4.x", "z: AND_INT R12.x, R12.x, R4.x", "w: AND_INT R12.y, R12.y, R4.x"],
  ["x: SETGE_INT R5.z, R4.y, 0xE", "y: SETGE_INT R5.w, R4.z, 0xE"],
+ # Étage 1 Indirect : le résultat est la texture 0 relue aux coordonnées décalées (texture 2 =
+ # carte de distorsion) ; l'étage 0 est ignoré (sinon son Replace affichait la texture 1, le
+ # damier du bouton sifflet de l'écran GamePad).
+ ["x: CNDE_INT R4.y, R5.w, R4.y, 0x0"],
  ["x: MOV R20.x, 0.5f", "y: MOV R20.y, 2.0f", "z: MOV R20.z, 1.0f"],
  # nw::lyt donne v croissant vers le haut de l'écran (v = 1 - t par uTexMtx), les textures sont
  # rangées ligne 0 en haut : v est retourné pour les trois jeux, avant le décalage indirect.

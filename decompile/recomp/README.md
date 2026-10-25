@@ -467,6 +467,16 @@ Relevés sur les captures en jeu (intro, zone enneigée, appel du communicateur)
    cache verrouillé.
 10. ~~Écran tactile~~ : la souris est l'écran tactile du GamePad (clic gauche maintenu ; sur
    l'écran du GamePad avec `--split`, sur toute l'image sinon). Confirmé en jeu.
+11. ~~Écran GamePad noir, bouton sifflet absent~~ (2026-10-25, confirmé en jeu) : le jeu dessine
+   l'interface GamePad dans sa cible 864×480, puis la relit comme texture 854×480 (même mémoire,
+   autre pas de ligne) pour la recoller sur elle-même. decaf voit deux surfaces distinctes et
+   synchronise la texture par une copie enregistrée à la préparation du dessin, alors que les
+   dessins précédents de la passe étaient encore en attente : la copie partait avant eux (écran
+   noir ; en mode stylet, copie faite avant le bouton sifflet, recouvert ensuite). Correctif dans
+   `vulkan_textures.cpp` (`resolveTextureFeedback`) : texture sur la même mémoire qu'une cible →
+   dessins en attente enregistrés d'abord. Le combineur lyt traite aussi un étage 1 « Indirect »
+   comme la texture 0 relue aux coordonnées décalées (étage 0 ignoré) ; hypothèse plausible
+   (matériaux du bouton sifflet, 3 textures, mode 0xE82) mais pas confirmée isolément.
 
 Outils ajoutés : `DECAF_RDOC_FRAMES=<n>` (avec `--rdoc-capture`) capture n images consécutives ;
 `DECAF_SKIP_PS=<nom du dump>` et `DECAF_SKIP_TEXSIZE=<l>x<h>` sautent des dessins ; `--probe`
