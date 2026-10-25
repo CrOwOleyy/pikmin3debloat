@@ -57,6 +57,13 @@ void inputRecordReplay(GamePadInput& in, bool& touched, float& tx, float& ty)
     std::lock_guard guard(lock);
     static uint64_t index = 0;
     const uint64_t n = index++;
+    // DECAF_F11_AT=<lecture> : équivalent de F11 (journal de la carte du GamePad) à cette lecture
+    static const char* f11At = getenv("DECAF_F11_AT");
+    if (f11At && n == strtoull(f11At, nullptr, 10))
+    {
+        rt::requestRadarProbe();
+        rt::requestDrawChains();
+    }
 
     static std::vector<InputSample> replay;
     static size_t next = 0;

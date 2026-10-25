@@ -105,6 +105,8 @@ extern bool g_probe; // --probe : sondes de diagnostic (probe.cpp, shaders…)
 void watchRange(uint32_t addr, uint32_t size, uint32_t maxHits, const char* label);
 std::string hostStack(); // pile d'appels hôte symbolisée (watch.cpp)
 void findGuestString(const char* text, uint32_t skipBegin, uint32_t skipEnd); // watch.cpp
+void requestRadarProbe(); // probe.cpp (F11)
+void requestDrawChains(); // gpu/bridge/decaf_bridge.cpp (F11)
 extern std::string g_traceFilter; // --trace-filter : ne trace que les imports contenant ce texte
 extern bool g_recordHle;          // --record <filtre> : enregistre en mémoire, vidé par --dump
 extern std::string g_recordFilter;

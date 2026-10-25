@@ -393,7 +393,7 @@ std::atomic<uint32_t> g_radarThis { 0 }; // objet RadarIcon_00 (this vu par sub_
         {                                                                                    \
             const uint32_t n = ++calls;                                                      \
             if (n == 1 || n == 10 || n == 100 || n == 1000 || n == 10000)                    \
-                RT_INFO("APPELS sub_" #addr " : %u (this %08X, lr %08X)", n, ctx.r3.u32, uint32_t(ctx.lr)); \
+                RT_INFO("APPELS sub_" #addr " : %u (this %08X, lr %08X, vtable+48 %08X)", n, ctx.r3.u32, uint32_t(ctx.lr), rt::load32(ctx.r3.u32 + 48)); \
         }                                                                                    \
         __imp__sub_##addr(ctx, base);                                                        \
     }
@@ -509,3 +509,67 @@ void sub_3454128(PPCContext& __restrict ctx, uint8_t* base)
     __imp__sub_3454128(ctx, base);
     s_paneDepth--;
 }
+
+// Carte du GamePad : panneau de carte (sub_2F40904, this = écran radar, vtable en +48) ; la
+// méthode virtuelle en +780 est appelée après le cercle découvert. Journalisée avec F11.
+extern "C" void __imp__sub_2F40904(PPCContext& __restrict ctx, uint8_t* base);
+
+void sub_2F40904(PPCContext& __restrict ctx, uint8_t* base)
+{
+    if (s_radarLogging)
+    {
+        const uint32_t self = ctx.r3.u32, vt = rt::load32(self + 48);
+        RT_INFO("RADAR panneau de carte : this %08X vtable %08X méthode +780 = %08X", self, vt, rt::load32(vt + 780));
+        auto dump = [&](const char* label, uint32_t addr, uint32_t words) {
+            std::string text;
+            for (uint32_t i = 0; i < words; i++)
+            {
+                char v[12];
+                snprintf(v, sizeof(v), " %08X", rt::load32(addr + i * 4));
+                text += v;
+            }
+            RT_INFO("RADAR %s @%08X :%s", label, addr, text.c_str());
+        };
+        dump("this+1360", self + 1360, 8);
+        for (uint32_t i = 0; i < 4; i++)
+        {
+            const uint32_t pane = rt::load32(self + 1364 + i * 4);
+            if (pane < 0x10000000 || pane >= 0x50000000)
+                continue;
+            const uint32_t pvt = rt::load32(pane + 8);
+            uint32_t children = 0;
+            for (uint32_t node = rt::load32(pane + 20); node != pane + 20 && node && children < 10000;
+                 node = rt::load32(node))
+                children++;
+            RT_INFO("RADAR calque %u : pane %08X vtable %08X DrawSelf(+148) %08X Draw(+140) %08X enfants %u", i, pane, pvt,
+                rt::load32(pvt + 148), rt::load32(pvt + 140), children);
+            dump("calque", pane, 64);
+        }
+        dump("this+2300", self + 2300, 32);
+        dump("this+2944", self + 2944, 8);
+        dump("this+3672", self + 3672, 16);
+        for (uint32_t off : { 3904u, 8524u, 10632u })
+        {
+            const uint32_t pool = rt::load32(self + off);
+            char label[32];
+            snprintf(label, sizeof(label), "réserve +%u", off);
+            if (pool >= 0x10000000 && pool < 0x50000000)
+                dump(label, pool, 80);
+        }
+    }
+    __imp__sub_2F40904(ctx, base);
+}
+COUNTED(2F3D76C)
+COUNTED(2F3972C)
+COUNTED(2F3A094)
+COUNTED(2F3A4DC)
+COUNTED(2F3AC5C)
+COUNTED(2F3ACFC)
+COUNTED(2F3B58C)
+COUNTED(2F3C43C)
+COUNTED(2F3A840)
+COUNTED(2F3C6A0)
+COUNTED(2F3D6A0)
+COUNTED(2F36548)
+COUNTED(2F36534)
+COUNTED(2F392A0)
