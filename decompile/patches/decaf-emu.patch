@@ -238,6 +238,101 @@ index 8c205f0..13ed4da 100644
  } // namespace internal
  
  } // namespace cafe::gx2
+diff --git a/src/libdecaf/src/cafe/libraries/sndcore2/sndcore2_config.cpp b/src/libdecaf/src/cafe/libraries/sndcore2/sndcore2_config.cpp
+index 602f70c..266a2fa 100644
+--- a/src/libdecaf/src/cafe/libraries/sndcore2/sndcore2_config.cpp
++++ b/src/libdecaf/src/cafe/libraries/sndcore2/sndcore2_config.cpp
+@@ -250,6 +250,39 @@ AXPrepareEfxData(virt_ptr<void> buffer,
+ namespace internal
+ {
+ 
++// Recomp Pikmin 3 (DECAF_RECOMP) : pas de thread ni d'alarme coreinit, le runtime appelle
++// runFrame() toutes les 3 ms depuis son propre « AX Callback Thread ».
++void
++runFrame()
++{
++   static const int NumOutputSamples = (48000 * 3) / 1000;
++   uint16_t numInputSamples = static_cast<uint16_t>(sConfigData->outputRate * 3 / 1000);
++   uint16_t numOutputChannels = static_cast<uint16_t>(sConfigData->outputChannels);
++
++   if (sConfigData->frameCallback) {
++      cafe::invoke(cpu::this_core::state(),
++                   sConfigData->frameCallback);
++   }
++
++   for (auto i = 0; i < MaxFrameCallbacks; ++i) {
++      if (sConfigData->appFrameCallbacks[i]) {
++         cafe::invoke(cpu::this_core::state(),
++                      sConfigData->appFrameCallbacks[i]);
++      }
++   }
++
++   internal::mixOutput(&sConfigData->mixBuffer[0], numInputSamples, numOutputChannels);
++
++   if (auto driver = decaf::getSoundDriver()) {
++      for (int i = 0; i < NumOutputSamples * sConfigData->outputChannels; ++i) {
++         sConfigData->outputBuffer[i] = static_cast<int16_t>(std::min<int32_t>(std::max<int32_t>(sConfigData->mixBuffer[i], -32768), 32767));
++      }
++
++      driver->output(&sConfigData->outputBuffer[0], NumOutputSamples);
++   }
++}
++
++#ifndef DECAF_RECOMP
+ static uint32_t
+ frameCallbackThreadEntry(uint32_t core_id,
+                          virt_ptr<void>)
+@@ -322,6 +355,8 @@ frameAlarmHandler(virt_ptr<OSAlarm> alarm,
+    coreinit::internal::unlockScheduler();
+ }
+ 
++#endif // DECAF_RECOMP
++
+ void
+ initEvents()
+ {
+@@ -332,6 +367,7 @@ initEvents()
+       sConfigData->appFrameCallbacks[i] = nullptr;
+    }
+ 
++#ifndef DECAF_RECOMP
+    startFrameAlarmThread();
+ 
+    auto ticks = static_cast<OSTime>(OSGetSystemInfo()->busSpeed / 4) * 3 / 1000;
+@@ -339,6 +375,7 @@ initEvents()
+    OSSetPeriodicAlarm(virt_addrof(sConfigData->frameAlarm),
+                       OSGetTime(), ticks,
+                       FrameAlarmHandler);
++#endif
+ }
+ 
+ int
+@@ -373,8 +410,10 @@ Library::registerConfigSymbols()
+    RegisterFunctionExport(AXPrepareEfxData);
+ 
+    RegisterDataInternal(sConfigData);
++#ifndef DECAF_RECOMP
+    RegisterFunctionInternal(internal::frameAlarmHandler, FrameAlarmHandler);
+    RegisterFunctionInternal(internal::frameCallbackThreadEntry, FrameCallbackThreadEntryPoint);
++#endif
+ }
+ 
+ } // namespace cafe::sndcore2
+diff --git a/src/libdecaf/src/cafe/libraries/sndcore2/sndcore2_config.h b/src/libdecaf/src/cafe/libraries/sndcore2/sndcore2_config.h
+index bc00dd5..a629d69 100644
+--- a/src/libdecaf/src/cafe/libraries/sndcore2/sndcore2_config.h
++++ b/src/libdecaf/src/cafe/libraries/sndcore2/sndcore2_config.h
+@@ -82,6 +82,10 @@ AXUserIsProtected();
+ namespace internal
+ {
+ 
++void
++runFrame();
++
++
+ void
+ initEvents();
+ 
 diff --git a/src/libgpu/src/spirv/spirv_alu_op2.cpp b/src/libgpu/src/spirv/spirv_alu_op2.cpp
 index 91a6739..ea66b0e 100644
 --- a/src/libgpu/src/spirv/spirv_alu_op2.cpp

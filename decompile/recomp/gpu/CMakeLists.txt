@@ -103,6 +103,18 @@ target_compile_options(decaf_gx2 PRIVATE ${DECAF_OPTIONS} /FIchrono)
 target_link_libraries(decaf_gx2 PUBLIC decaf_gpu)
 set_target_properties(decaf_gx2 PROPERTIES CXX_STANDARD 17)
 
+# ---------------------------------------------------------------- decaf : snd_core (AX, HLE)
+# Moteur audio de decaf (voix, ADPCM, mixage) ; DECAF_RECOMP : pas de thread interne, le runtime
+# appelle sndcore2::internal::runFrame() toutes les 3 ms (runtime/snd.cpp).
+file(GLOB DECAF_SND_SOURCES ${LIBDECAF_SRC}/cafe/libraries/sndcore2/*.cpp ${DECAF_SRC}/libdecaf/src/decaf_sound.cpp)
+add_library(decaf_snd STATIC ${DECAF_SND_SOURCES})
+target_include_directories(decaf_snd PUBLIC
+    ${LIBDECAF_SRC} ${DECAF_SRC}/libdecaf ${DECAF_SRC})
+target_compile_definitions(decaf_snd PRIVATE DECAF_RECOMP)
+target_compile_options(decaf_snd PRIVATE ${DECAF_OPTIONS} /FIchrono)
+target_link_libraries(decaf_snd PUBLIC decaf_gx2)
+set_target_properties(decaf_snd PROPERTIES CXX_STANDARD 17)
+
 # ---------------------------------------------------------------- outil : latte-assembler
 # Assembleur de shaders Latte de decaf (texte → .gsh), pour reconstruire lyt_BuildinShader.gsh
 # (shaders/). Hors de la cible par défaut : cmake --build build --target latte_assembler

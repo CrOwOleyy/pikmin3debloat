@@ -13,6 +13,8 @@
 #include <cafe/libraries/cafe_hle_library.h>
 #include <cafe/libraries/gx2/gx2.h>
 #include <cafe/libraries/gx2/gx2_shaders.h>
+#include <cafe/libraries/snd_core/snd_core.h>
+#include <cafe/libraries/sndcore2/sndcore2_config.h>
 #include <libgpu/latte/latte_disassembler.h>
 #include <chrono>
 #include <map>
@@ -624,6 +626,10 @@ struct Gx2Library : cafe::gx2::Library
 {
     using cafe::gx2::Library::registerSymbols;
 };
+struct SndLibrary : cafe::snd_core::Library
+{
+    using cafe::snd_core::Library::registerSymbols;
+};
 
 } // namespace
 
@@ -677,10 +683,12 @@ void decafGx2RunEntry()
     ctx = saved;
 }
 
-void decafGx2Register()
+// Branche les fonctions d'une bibliothèque HLE de decaf sur les imports `lib` du jeu et alloue
+// ses données internes en mémoire invitée. Renvoie l'entrée rpl_entry (ou nullptr).
+static BridgeFunction* registerDecafLibrary(cafe::hle::Library& library, const char* lib, const char* label,
+                                            void (*customize)(const std::string&, BridgeFunction*) = nullptr)
 {
-    static Gx2Library library;
-    library.registerSymbols();
+    BridgeFunction* entry = nullptr;
     size_t functions = 0, data = 0, internals = 0;
     for (auto& [name, symbol] : library.getSymbolMap())
     {
@@ -689,15 +697,17 @@ void decafGx2Register()
             auto* fn = static_cast<cafe::hle::LibraryFunction*>(symbol.get());
             auto guard = kGuards.find(name);
             auto* bridge = new BridgeFunction { fn, guard == kGuards.end() ? nullptr : guard->second };
+            if (customize)
+                customize(name, bridge);
             if (name == "rpl_entry")
-                s_gx2Entry = bridge;
+                entry = bridge;
             else if (fn->hostPtr)
             {
                 // Fonction interne passée au jeu comme pointeur (callbacks…)
                 *fn->hostPtr = virt_cast<void*>(virt_addr { exportHostFunction(invokeDecafFunction, bridge) });
                 internals++;
             }
-            else if (hleSetImplementation("gx2", name, invokeDecafFunction, bridge))
+            else if (hleSetImplementation(lib, name, invokeDecafFunction, bridge))
                 functions++;
         }
         else if (symbol->type == cafe::hle::LibrarySymbol::Data)
@@ -711,9 +721,45 @@ void decafGx2Register()
             data++;
         }
     }
-    RT_INFO("GX2 de decaf : %zu fonctions branchées, %zu internes, %zu données", functions, internals, data);
-    for (const auto& name : hleListWithoutEx("gx2"))
-        RT_INFO("  import gx2 non couvert par decaf : %s", name.c_str());
+    RT_INFO("%s de decaf : %zu fonctions branchées, %zu internes, %zu données", label, functions, internals, data);
+    for (const auto& name : hleListWithoutEx(lib))
+        RT_INFO("  import %s non couvert par decaf : %s", lib, name.c_str());
+    return entry;
+}
+
+void decafGx2Register()
+{
+    static Gx2Library library;
+    library.registerSymbols();
+    s_gx2Entry = registerDecafLibrary(library, "gx2", "GX2");
+}
+
+void sndStartFrameThread(); // runtime/snd.cpp
+void sndOutputInit();       // sound_out.cpp
+
+// snd_core (AX) de decaf : voix, décodage, mixage. Le thread de trame AX est celui du runtime,
+// démarré après AXInit, qui appelle decafSndRunFrame() toutes les 3 ms.
+void decafSndRegister()
+{
+    static SndLibrary library;
+    library.registerSymbols();
+    sndOutputInit();
+    registerDecafLibrary(library, "snd_core", "snd_core", [](const std::string& name, BridgeFunction* bridge) {
+        if (name == "AXInit" || name == "AXInitWithParams")
+            bridge->after = [](PPCContext&) { sndStartFrameThread(); };
+    });
+}
+
+// Une trame AX (3 ms) : callbacks du jeu, mixage des voix, envoi à la sortie son.
+void decafSndRunFrame()
+{
+    PPCContext& ctx = *currentContext();
+    cpu::Core core {};
+    contextToCore(ctx, core);
+    cpu::Core* previous = t_core;
+    t_core = &core;
+    cafe::sndcore2::internal::runFrame();
+    t_core = previous;
 }
 
 } // namespace rt

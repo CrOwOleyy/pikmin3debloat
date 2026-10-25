@@ -21,6 +21,8 @@ namespace rt
 extern fs::path g_gameDir, g_updateDir, g_dlcDir, g_saveDir;
 void memHeapsInit(uint32_t mem2Start);
 void decafGx2Register();
+void decafSndRegister();
+extern bool g_noSound;
 void decafGx2RunEntry();
 void gpuStart();
 void gpuMessageLoop(void* gameThread);
@@ -196,6 +198,8 @@ int main(int argc, char** argv)
             g_profileSeconds = uint32_t(atoi(argv[++i]));
         else if (a == "--rdoc-capture" && i + 1 < argc)
             g_rdocCaptureAt = uint32_t(atoi(argv[++i]));
+        else if (a == "--no-sound")
+            g_noSound = true;
         else if (a == "--auto-a" && i + 1 < argc)
             g_autoA = uint32_t(atoi(argv[++i]));
         else if (a == "--input-test")
@@ -227,6 +231,7 @@ int main(int argc, char** argv)
     memHeapsInit((g_image.dataEnd + 0xFFFF) & ~0xFFFFu);
     hleInit();
     decafGx2Register();
+    decafSndRegister();
     gpuStart();
     profileStart();
 

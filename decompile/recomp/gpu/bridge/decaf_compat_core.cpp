@@ -16,7 +16,7 @@ volatile bool FunctionTraceEnabled = false;
 
 void warnStubInvoked(const char* name)
 {
-   RT_WARN("GX2 (decaf) : fonction non implémentée %s", name);
+   RT_WARN("decaf : fonction non implémentée %s", name);
 }
 } // namespace cafe::hle
 

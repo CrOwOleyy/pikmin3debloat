@@ -477,6 +477,13 @@ Relevés sur les captures en jeu (intro, zone enneigée, appel du communicateur)
    dessins en attente enregistrés d'abord. Le combineur lyt traite aussi un étage 1 « Indirect »
    comme la texture 0 relue aux coordonnées décalées (étage 0 ignoré) ; hypothèse plausible
    (matériaux du bouton sifflet, 3 textures, mode 0xE82) mais pas confirmée isolément.
+12. ~~Pas de son~~ (2026-10-25, confirmé en jeu) : snd_core (AX) est désormais celui de decaf
+   (`sndcore2` : voix, décodage ADPCM/PCM, mixage, callbacks de mixage final), branché comme GX2
+   (`decafSndRegister`, bibliothèque `decaf_snd`). Compilé avec `DECAF_RECOMP` : decaf ne crée ni
+   thread ni alarme, `runtime/snd.cpp` appelle `sndcore2::internal::runFrame()` toutes les 3 ms.
+   Sortie waveOut 48 kHz stéréo (`gpu/bridge/sound_out.cpp`, tampons de 10 ms, au plus 80 ms
+   d'avance) ; `--no-sound` ou `DECAF_NO_SOUND` la coupent. Pas encore gérés : filtres de voix
+   (LPF, biquad), son du GamePad (mixé puis ignoré par decaf), DRCVS.
 
 Outils ajoutés : `DECAF_RDOC_FRAMES=<n>` (avec `--rdoc-capture`) capture n images consécutives ;
 `DECAF_SKIP_PS=<nom du dump>` et `DECAF_SKIP_TEXSIZE=<l>x<h>` sautent des dessins ; `--probe`
