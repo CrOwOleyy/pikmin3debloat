@@ -488,10 +488,16 @@ Relevés sur les captures en jeu (intro, zone enneigée, appel du communicateur)
    Sortie waveOut 48 kHz stéréo (`gpu/bridge/sound_out.cpp`, tampons de 10 ms, au plus 80 ms
    d'avance) ; `--no-sound` ou `DECAF_NO_SOUND` la coupent. Pas encore gérés : filtres de voix
    (LPF, biquad), son du GamePad (mixé puis ignoré par decaf), DRCVS.
-13. **Eau violette opaque** (2026-10-25, retour de test) : la rivière sous le tronc (zone enneigée,
-   après la cinématique c06) est d'un bleu-violet saturé et opaque, alors qu'elle doit être
-   transparente. À examiner avec une capture F12 (`recomp/rdoc.bat`) : shader de l'eau, texture
-   de réfraction ou mélange.
+13. ~~Eau violette opaque~~ (corrigé le 2026-10-25, à confirmer en jeu) : l'eau (étang, rivière
+   sous le tronc) était d'un bleu-violet saturé. Le shader de l'eau (capture F12, draw 2620,
+   débogué pixel par pixel dans RenderDoc) est traduit fidèlement : la réfraction (copie de la
+   scène) et l'absorption sont justes, mais il ajoute un reflet planaire lu dans une cible
+   512×512 au format GX2 1_5_5_5, et ce reflet valait (0, 0, 1) partout : 4 échantillons × 0,04
+   ajoutaient +0,16 de bleu sur une eau déjà assombrie. decaf déclarait R5G5B5A1/R4G4B4A4
+   « texture seule » (TODO) : l'image Vulkan était créée sans l'usage ColorAttachment, les draws
+   du reflet passaient tous les tests mais leurs écritures étaient perdues (comportement
+   indéfini), la cible restait au bleu de son clear. Ces formats deviennent texture + couleur
+   quand le GPU les accepte comme cible (`gPack16ColorAttachment`, `vulkan_validate.cpp`).
 14. ~~Plantage : appel indirect vers 0x00000000~~ (lr=0x031B3FF8, corrigé le 2026-10-25) : les gardes
    de registres (`probe.cpp`) ont montré que `sub_31B42FC` rendait r28 faux, sa pile ayant été
    écrasée par du code audio (nw::snd) au pointeur de pile voisin de celui du thread principal. Le

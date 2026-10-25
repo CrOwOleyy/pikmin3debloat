@@ -1553,10 +1553,10 @@ index f8f0a16..ed0cfef 100644
              transitionSurfaceView(psSurface, ResourceUsage::PixelTexture, vk::ImageLayout::eShaderReadOnlyOptimal, true);
           } else {
 diff --git a/src/libgpu/src/vulkan/vulkan_utils.cpp b/src/libgpu/src/vulkan/vulkan_utils.cpp
-index 49414c3..b8ca605 100644
+index 49414c3..84a2476 100644
 --- a/src/libgpu/src/vulkan/vulkan_utils.cpp
 +++ b/src/libgpu/src/vulkan/vulkan_utils.cpp
-@@ -7,6 +7,10 @@
+@@ -7,6 +7,15 @@
  namespace vulkan
  {
  
@@ -1564,10 +1564,15 @@ index 49414c3..b8ca605 100644
 +// (AMD hardware): such surfaces are then created as D32S8.
 +bool gD24S8Fallback = false;
 +
++// Set by Driver::validateDevice when the device can render to R5G5B5A1 / R4G4B4A4 (optional
++// in Vulkan). Games render into these formats (Pikmin 3 renders its water reflection in
++// 1_5_5_5); without the ColorAttachment usage the draws are silently dropped.
++bool gPack16ColorAttachment = false;
++
  vk::Format
  getVkSurfaceFormat(latte::SurfaceFormat format, latte::SQ_TILE_TYPE tileType)
  {
-@@ -17,9 +21,9 @@ getVkSurfaceFormat(latte::SurfaceFormat format, latte::SQ_TILE_TYPE tileType)
+@@ -17,9 +26,9 @@ getVkSurfaceFormat(latte::SurfaceFormat format, latte::SQ_TILE_TYPE tileType)
        case latte::SurfaceFormat::R32Float:
           return vk::Format::eD32Sfloat;
        case latte::SurfaceFormat::D24UnormS8Uint:
@@ -1579,7 +1584,7 @@ index 49414c3..b8ca605 100644
        case latte::SurfaceFormat::D32FloatS8UintX24:
           return vk::Format::eD32SfloatS8Uint; // Wrong Size?
        case latte::SurfaceFormat::D32G8UintX24:
-@@ -83,9 +87,9 @@ getVkSurfaceFormat(latte::SurfaceFormat format, latte::SQ_TILE_TYPE tileType)
+@@ -83,9 +92,9 @@ getVkSurfaceFormat(latte::SurfaceFormat format, latte::SQ_TILE_TYPE tileType)
     case latte::SurfaceFormat::R16G16Float:
        return vk::Format::eR16G16Sfloat;
     case latte::SurfaceFormat::D24UnormS8Uint:
@@ -1591,8 +1596,21 @@ index 49414c3..b8ca605 100644
     case latte::SurfaceFormat::R11G11B10Float:
        return vk::Format::eB10G11R11UfloatPack32; // This is the incorrect format...
        //return vk::Format::eB10G11R11UfloatPack32; // Remapped?
+@@ -204,11 +213,9 @@ getVkSurfaceFormatUsage(latte::SurfaceFormat format)
+    case latte::SurfaceFormat::R5G6B5Unorm:
+       return SurfaceFormatUsage::TC;
+    case latte::SurfaceFormat::R5G5B5A1Unorm:
+-      return SurfaceFormatUsage::T; // TODO: Should support TC
+    case latte::SurfaceFormat::R4G4B4A4Unorm:
+-      return SurfaceFormatUsage::T; // TODO: Should support TC
+    case latte::SurfaceFormat::A1B5G5R5Unorm:
+-      return SurfaceFormatUsage::T; // TODO: Should support TC
++      return gPack16ColorAttachment ? SurfaceFormatUsage::TC : SurfaceFormatUsage::T;
+    case latte::SurfaceFormat::R32Uint:
+       return SurfaceFormatUsage::TC;
+    case latte::SurfaceFormat::R32Sint:
 diff --git a/src/libgpu/src/vulkan/vulkan_utils.h b/src/libgpu/src/vulkan/vulkan_utils.h
-index db7672d..d5eb0b4 100644
+index db7672d..069e94c 100644
 --- a/src/libgpu/src/vulkan/vulkan_utils.h
 +++ b/src/libgpu/src/vulkan/vulkan_utils.h
 @@ -1,4 +1,5 @@
@@ -1601,11 +1619,12 @@ index db7672d..d5eb0b4 100644
  #ifdef DECAF_VULKAN
  #include "latte/latte_formats.h"
  
-@@ -26,6 +27,16 @@ enum SurfaceFormatUsage : uint32_t
+@@ -26,6 +27,17 @@ enum SurfaceFormatUsage : uint32_t
  vk::Format
  getVkSurfaceFormat(latte::SurfaceFormat format, latte::SQ_TILE_TYPE tileType);
  
 +extern bool gD24S8Fallback;
++extern bool gPack16ColorAttachment;
 +
 +// DECAF_GPU7_ORIENTATION=1: keep NDC +1 on row 0 (viewport not flipped), flip at display.
 +inline bool
@@ -1619,10 +1638,10 @@ index db7672d..d5eb0b4 100644
  getVkComponentSwizzle(latte::SQ_SEL sel);
  
 diff --git a/src/libgpu/src/vulkan/vulkan_validate.cpp b/src/libgpu/src/vulkan/vulkan_validate.cpp
-index 612ef10..a57f520 100644
+index 612ef10..0f4a0c7 100644
 --- a/src/libgpu/src/vulkan/vulkan_validate.cpp
 +++ b/src/libgpu/src/vulkan/vulkan_validate.cpp
-@@ -86,6 +86,12 @@ auto supportedDepthFormats = {
+@@ -86,6 +86,21 @@ auto supportedDepthFormats = {
  void
  Driver::validateDevice()
  {
@@ -1630,6 +1649,15 @@ index 612ef10..a57f520 100644
 +   if (!(d24s8Props.optimalTilingFeatures & vk::FormatFeatureFlagBits::eDepthStencilAttachment)) {
 +      gLog->warn("D24S8 is not a supported depth attachment, using D32S8 instead");
 +      gD24S8Fallback = true;
++   }
++
++   auto colorAttachment = [&](vk::Format format) {
++      return !!(mPhysDevice.getFormatProperties(format).optimalTilingFeatures & vk::FormatFeatureFlagBits::eColorAttachment);
++   };
++   gPack16ColorAttachment = colorAttachment(vk::Format::eR5G5B5A1UnormPack16) &&
++                            colorAttachment(vk::Format::eR4G4B4A4UnormPack16);
++   if (!gPack16ColorAttachment) {
++      gLog->warn("R5G5B5A1/R4G4B4A4 are not supported color attachments, rendering into them is ignored");
 +   }
 +
     // TODO: Decide what is a hard requirement and what is optional
