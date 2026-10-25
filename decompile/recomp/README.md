@@ -457,6 +457,14 @@ Relevés sur les captures en jeu (intro, zone enneigée, appel du communicateur)
    3 ou 4 vsync). Les stubs `nn_boss` font maintenant une pause d'1 ms. Le minuteur système passe
    aussi à 1 ms (`timeBeginPeriod`) : les alarmes, dont la vsync, se réveillaient par pas de
    15,6 ms. Le profileur (`--profile`) affiche le temps propre/inclusif par fonction.
+9. **Plantage GX2 (2026-10-25, à traiter)** : assertion `cb->cmdSize == cb->cmdSizeTarget`
+   (`gx2_cbpool.h:152`) dans `GX2SetDepthStencilControl`, appelé depuis un thread de travail du
+   jeu (`sub_32385B8` → … → `sub_321D074`), juste après le chargement de mapC. Piste : decaf garde
+   un tampon de commandes actif **par cœur** (`activeCommandBuffer[cpu::this_core::id()]`) ; si
+   deux threads invités vus sur le même cœur (threads de travail des cœurs 0 et 2, thread
+   MakeStaticDL…) écrivent des commandes GX2 en même temps, ils se marchent dessus. Même famille
+   de bug que le cache verrouillé : un état « par cœur » partagé entre threads qui tournent
+   vraiment en parallèle.
 
 Outils ajoutés : `DECAF_RDOC_FRAMES=<n>` (avec `--rdoc-capture`) capture n images consécutives ;
 `DECAF_SKIP_PS=<nom du dump>` et `DECAF_SKIP_TEXSIZE=<l>x<h>` sautent des dessins ; `--probe`
