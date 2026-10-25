@@ -204,18 +204,29 @@ bool guardSetGeometryShader(PPCContext& ctx)
 
 std::atomic<uint32_t> s_probeTarget { 0 }; // image de la cible de couleur 0 liée (--probe)
 
-// DECAF_DRAW_CHAINS=<s> : <s> secondes après le démarrage, journalise les chaînes d'appelants
-// invités (8 niveaux) des 4000 draws suivants, regroupées avec leur nombre (diagnostic).
+// DECAF_DRAW_CHAINS=<s> (ou F11) : <s> secondes après le démarrage, journalise les chaînes
+// d'appelants invités (8 niveaux) des 4000 draws suivants, regroupées avec leur nombre.
+std::atomic<bool> s_drawChainsRequest { false };
+
 void logDrawChains(PPCContext& ctx)
 {
     static const char* env = getenv("DECAF_DRAW_CHAINS");
-    if (!env)
-        return;
-    static const auto start = std::chrono::steady_clock::now() + std::chrono::seconds(atoi(env));
+    static const auto start = std::chrono::steady_clock::now() + std::chrono::seconds(env ? atoi(env) : 0);
     static std::mutex lock;
     static std::map<std::string, uint32_t> chains;
-    static uint32_t seen = 0;
-    if (std::chrono::steady_clock::now() < start)
+    static uint32_t seen = 4001;
+    static bool envDone = false;
+    if (s_drawChainsRequest.load() || (env && !envDone && std::chrono::steady_clock::now() >= start))
+    {
+        std::lock_guard guard(lock);
+        if (s_drawChainsRequest.exchange(false) || !envDone)
+        {
+            envDone = true;
+            chains.clear();
+            seen = 0;
+        }
+    }
+    if (seen > 4000)
         return;
     std::lock_guard guard(lock);
     if (seen > 4000)
@@ -236,8 +247,11 @@ void logDrawChains(PPCContext& ctx)
     }
     chains[chain]++;
     if (++seen == 4000)
+    {
         for (auto& [c, n] : chains)
             RT_INFO("DRAW %5u : %s", n, c.c_str());
+        seen = 4001;
+    }
 }
 
 bool guardDraw(PPCContext& ctx)
@@ -706,6 +720,12 @@ BridgeFunction* s_gx2Entry = nullptr;
 
 namespace rt
 {
+
+// F11 (gpu_window.cpp) : chaînes d'appel des 4000 draws suivants
+void requestDrawChains()
+{
+    s_drawChainsRequest = true;
+}
 
 // Appelle l'initialisation du module gx2.rpl (rpl_entry) sur le thread invité courant.
 void decafGx2RunEntry()

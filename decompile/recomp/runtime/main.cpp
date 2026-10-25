@@ -225,6 +225,19 @@ int main(int argc, char** argv)
     if (!findGameDirs(root) && !findGameDirs(fs::path(PIKMIN3_RECOMP_DIR)))
         fatal("dossier « PIKMIN 3 [Game] … » introuvable (option --root)");
     g_saveDir = exeDir() / "save";
+    // Sans --record-input ni --replay-input, chaque partie est enregistrée (commandes, tactile)
+    // dans build/inputs/partie_<date>_<heure>.txt, rejouable avec --replay-input.
+    if (g_recordInput.empty() && g_replayInput.empty())
+    {
+        const fs::path dir = exeDir() / "inputs";
+        std::error_code ec;
+        fs::create_directories(dir, ec);
+        const time_t now = time(nullptr);
+        char name[64];
+        strftime(name, sizeof(name), "partie_%Y%m%d_%H%M%S.txt", localtime(&now));
+        g_recordInput = pathToUtf8(dir / name);
+        RT_INFO("enregistrement des commandes : %s", g_recordInput.c_str());
+    }
     RT_INFO("jeu : %s", pathToUtf8(g_gameDir).c_str());
     RT_INFO("update : %s", pathToUtf8(g_updateDir).c_str());
     RT_INFO("DLC : %s", pathToUtf8(g_dlcDir).c_str());

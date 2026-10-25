@@ -438,15 +438,27 @@ COUNTED_THIS(30B3BC8)
 COUNTED_THIS(30B3C0C)
 COUNTED_THIS(30B3C8C)
 
-// DECAF_PROBE_RADAR=<s> : <s> secondes après le démarrage, pendant un dessin de la carte du
-// GamePad (sub_2F3DAE4), journalise chaque panneau lyt visité par nw::lyt::Pane::Draw
-// (sub_3454128) : nom, drapeaux (+68, bit 0 = visible), alpha (+69, +70), 16 flottants.
+// Carte du GamePad : F11 (ou DECAF_PROBE_RADAR=<s>, <s> secondes après le démarrage) journalise,
+// pendant le prochain dessin de la carte (sub_2F3DAE4), chaque panneau lyt visité par
+// nw::lyt::Pane::Draw (sub_3454128) : profondeur, nom, drapeaux (+68, bit 0 = visible), alpha
+// (+69, +70) et 16 flottants (position, échelle, taille).
 namespace
 {
-std::atomic<int> s_radarDepth { 0 };
 std::atomic<bool> s_radarLogged { false };
 std::atomic<bool> s_radarLogging { false };
+std::atomic<bool> s_radarRequest { false };
+std::atomic<int> s_paneDepth { 0 };
 }
+
+namespace rt
+{
+void requestRadarProbe() // F11 (gpu_window.cpp)
+{
+    s_radarRequest = true;
+    RT_INFO("RADAR : journal demandé pour le prochain dessin de la carte du GamePad");
+}
+}
+
 extern "C" void __imp__sub_2F3DAE4(PPCContext& __restrict ctx, uint8_t* base);
 extern "C" void __imp__sub_3454128(PPCContext& __restrict ctx, uint8_t* base);
 
@@ -454,7 +466,7 @@ void sub_2F3DAE4(PPCContext& __restrict ctx, uint8_t* base)
 {
     static const char* env = getenv("DECAF_PROBE_RADAR");
     static const auto start = std::chrono::steady_clock::now() + std::chrono::seconds(env ? atoi(env) : 0);
-    const bool log = env && !s_radarLogged && std::chrono::steady_clock::now() >= start;
+    const bool log = s_radarRequest.exchange(false) || (env && !s_radarLogged && std::chrono::steady_clock::now() >= start);
     if (log)
         s_radarLogging = true;
     __imp__sub_2F3DAE4(ctx, base);
@@ -471,14 +483,15 @@ void sub_3454128(PPCContext& __restrict ctx, uint8_t* base)
     {
         const uint32_t pane = ctx.r3.u32;
         std::string name;
-        for (uint32_t off = 0x48; off < 0xC0 && name.empty(); off++)
+        for (uint32_t off = 0x40; off < 0x120 && name.empty(); off++)
         {
-            const char* s = reinterpret_cast<const char*>(base + pane + off);
-            if ((s[0] == 'N' || s[0] == 'P' || s[0] == 'R' || s[0] == 'B') && s[1] == '_' && s[2] >= 'A' && s[2] <= 'z')
-                name = std::string(s, strnlen(s, 24)) + "@+" + std::to_string(off);
+            const char* p = reinterpret_cast<const char*>(base + pane + off);
+            size_t n = 0;
+            while (n < 24 && p[n] >= 0x30 && p[n] < 0x7B)
+                n++;
+            if (n >= 4 && p[n] == 0)
+                name = std::string(p, n) + "@+" + std::to_string(off);
         }
-        if (name.empty() && !strncmp(reinterpret_cast<const char*>(base + pane + 0x54), "RootPane", 8))
-            name = "RootPane";
         std::string floats;
         for (uint32_t off = 0x18; off < 0x58; off += 4)
         {
@@ -489,8 +502,10 @@ void sub_3454128(PPCContext& __restrict ctx, uint8_t* base)
             snprintf(v, sizeof(v), " %g", f);
             floats += v;
         }
-        RT_INFO("RADAR pane %08X %-28s drap %02X alpha %u/%u f :%s", pane, name.c_str(), base[pane + 68], base[pane + 69],
-            base[pane + 70], floats.c_str());
+        RT_INFO("RADAR %*s%08X %-28s drap %02X alpha %u/%u f :%s", s_paneDepth.load() * 2, "", pane, name.c_str(),
+            base[pane + 68], base[pane + 69], base[pane + 70], floats.c_str());
     }
+    s_paneDepth++;
     __imp__sub_3454128(ctx, base);
+    s_paneDepth--;
 }

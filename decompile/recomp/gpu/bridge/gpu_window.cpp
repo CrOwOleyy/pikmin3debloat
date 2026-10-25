@@ -75,7 +75,7 @@ void captureLoop()
 }
 
 } // namespace
-namespace rt { void rdocCaptureNow(); }
+namespace rt { void rdocCaptureNow(); void requestRadarProbe(); void requestDrawChains(); }
 namespace {
 
 LRESULT CALLBACK windowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
@@ -90,6 +90,11 @@ LRESULT CALLBACK windowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
       // F12 : capture RenderDoc de l'image suivante (jeu lancé sous RenderDoc), dans recomp/rdoc
       if (wparam == VK_F12)
          rt::rdocCaptureNow();
+      // F11 : journal de diagnostic de la carte du GamePad (panneaux lyt, chaînes d'appel des draws)
+      if (wparam == VK_F11) {
+         rt::requestRadarProbe();
+         rt::requestDrawChains();
+      }
       break;
    case WM_CLOSE:
       RT_INFO("fenêtre fermée : arrêt");

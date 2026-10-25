@@ -362,7 +362,12 @@ La sonde `--probe` journalise chaque `GX2SetViewport` distinct.
 - **`--record-input <fichier>` / `--replay-input <fichier>`** : enregistre chaque changement de
   commandes (boutons, sticks, tactile) avec le numéro de lecture de la manette, puis les rejoue au
   même numéro (retour aux vraies commandes à la fin). Sert à revenir à l'endroit d'un bug signalé ;
-  le jeu n'étant pas parfaitement déterministe ici, le rejeu peut dériver.
+  le jeu n'étant pas parfaitement déterministe ici, le rejeu peut dériver. Sans ces options, chaque
+  partie est enregistrée automatiquement dans `build/inputs/partie_<date>_<heure>.txt`.
+- **F11** (carte du GamePad) : au prochain dessin de la carte, journalise chaque panneau lyt visité
+  (profondeur, nom, visibilité, alpha, position) et les chaînes d'appel des 4000 draws suivants
+  (`RADAR …` et `DRAW …` dans `pikmin3.log`). Mêmes journaux au bout de `<s>` secondes avec
+  `DECAF_PROBE_RADAR=<s>` / `DECAF_DRAW_CHAINS=<s>`.
 - **`--auto-a <ms>`** : appuie sur A toutes les `<ms>` ms, pour faire défiler les dialogues
   sans joueur (captures automatiques avec `--capture`).
 
