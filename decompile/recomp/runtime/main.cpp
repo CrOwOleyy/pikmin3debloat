@@ -23,6 +23,7 @@ void memHeapsInit(uint32_t mem2Start);
 void decafGx2Register();
 void decafSndRegister();
 extern bool g_noSound;
+extern std::string g_recordInput, g_replayInput;
 void decafGx2RunEntry();
 void gpuStart();
 void gpuMessageLoop(void* gameThread);
@@ -198,6 +199,10 @@ int main(int argc, char** argv)
             g_profileSeconds = uint32_t(atoi(argv[++i]));
         else if (a == "--rdoc-capture" && i + 1 < argc)
             g_rdocCaptureAt = uint32_t(atoi(argv[++i]));
+        else if (a == "--record-input" && i + 1 < argc)
+            g_recordInput = argv[++i];
+        else if (a == "--replay-input" && i + 1 < argc)
+            g_replayInput = argv[++i];
         else if (a == "--no-sound")
             g_noSound = true;
         else if (a == "--auto-a" && i + 1 < argc)

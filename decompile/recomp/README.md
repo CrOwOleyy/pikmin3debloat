@@ -359,6 +359,10 @@ La sonde `--probe` journalise chaque `GX2SetViewport` distinct.
   automatique sur D32S8 quand le pilote ne le prend pas en charge.
 - **Journal de decaf** : avec `--probe`, les messages internes de libgpu (formats non pris en
   charge, draws ignorés…) s'affichent sur la console.
+- **`--record-input <fichier>` / `--replay-input <fichier>`** : enregistre chaque changement de
+  commandes (boutons, sticks, tactile) avec le numéro de lecture de la manette, puis les rejoue au
+  même numéro (retour aux vraies commandes à la fin). Sert à revenir à l'endroit d'un bug signalé ;
+  le jeu n'étant pas parfaitement déterministe ici, le rejeu peut dériver.
 - **`--auto-a <ms>`** : appuie sur A toutes les `<ms>` ms, pour faire défiler les dialogues
   sans joueur (captures automatiques avec `--capture`).
 

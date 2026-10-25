@@ -4,6 +4,10 @@
 #include "kernel.h"
 
 #include <cmath>
+#include <cstdio>
+#include <mutex>
+#include <string>
+#include <vector>
 
 using namespace rt;
 
@@ -27,6 +31,89 @@ GamePadInput inputSampleGamePad(); // input.cpp : clavier + manette XInput
 bool windowTouch(float& x, float& y); // gpu_window.cpp : souris -> écran tactile
 }
 
+// --record-input <fichier> : note chaque changement de commandes (boutons, sticks, tactile) avec le
+// numéro de lecture de la manette (le jeu la lit une fois par image) ; --replay-input <fichier> :
+// rejoue ces commandes au même numéro de lecture, puis rend la main aux vraies commandes. Le jeu
+// n'étant pas parfaitement déterministe ici (threads en parallèle), le rejeu peut dériver.
+namespace rt
+{
+std::string g_recordInput, g_replayInput;
+}
+
+namespace
+{
+struct InputSample
+{
+    uint64_t index;
+    uint32_t buttons;
+    float lx, ly, rx, ry;
+    int touched;
+    float tx, ty;
+};
+
+void inputRecordReplay(GamePadInput& in, bool& touched, float& tx, float& ty)
+{
+    static std::mutex lock;
+    std::lock_guard guard(lock);
+    static uint64_t index = 0;
+    const uint64_t n = index++;
+
+    static std::vector<InputSample> replay;
+    static size_t next = 0;
+    static bool loaded = false, replaying = false;
+    if (!loaded)
+    {
+        loaded = true;
+        if (!rt::g_replayInput.empty())
+            if (FILE* f = fopen(rt::g_replayInput.c_str(), "r"))
+            {
+                InputSample e;
+                while (fscanf(f, "%llu %x %f %f %f %f %d %f %f", &e.index, &e.buttons, &e.lx, &e.ly, &e.rx, &e.ry,
+                           &e.touched, &e.tx, &e.ty) == 9)
+                    replay.push_back(e);
+                fclose(f);
+                replaying = !replay.empty();
+                RT_INFO("rejeu des commandes : %zu changements (%s)", replay.size(), rt::g_replayInput.c_str());
+            }
+    }
+    if (replaying)
+    {
+        static InputSample current {};
+        while (next < replay.size() && replay[next].index <= n)
+            current = replay[next++];
+        if (next >= replay.size() && n > replay.back().index + 30)
+        {
+            replaying = false;
+            RT_INFO("rejeu des commandes terminé (lecture %llu) : commandes réelles", (unsigned long long)n);
+        }
+        else
+        {
+            in.buttons = current.buttons;
+            in.leftX = current.lx; in.leftY = current.ly; in.rightX = current.rx; in.rightY = current.ry;
+            touched = current.touched != 0;
+            tx = current.tx; ty = current.ty;
+            return;
+        }
+    }
+
+    if (!rt::g_recordInput.empty())
+    {
+        static FILE* f = fopen(rt::g_recordInput.c_str(), "w");
+        static InputSample last { ~0ull };
+        const InputSample cur { n, in.buttons, in.leftX, in.leftY, in.rightX, in.rightY, touched ? 1 : 0, tx, ty };
+        if (f && (last.index == ~0ull || cur.buttons != last.buttons || cur.lx != last.lx || cur.ly != last.ly ||
+                  cur.rx != last.rx || cur.ry != last.ry || cur.touched != last.touched ||
+                  (cur.touched && (cur.tx != last.tx || cur.ty != last.ty))))
+        {
+            fprintf(f, "%llu %x %g %g %g %g %d %g %g\n", (unsigned long long)n, cur.buttons, cur.lx, cur.ly, cur.rx,
+                cur.ry, cur.touched, cur.tx, cur.ty);
+            fflush(f);
+            last = cur;
+        }
+    }
+}
+}
+
 // int32_t VPADRead(chan, VPADStatus* buffers, uint32_t count, VPADReadError* error)
 // VPADStatus (decaf vpad_controller.h) : hold +0, trigger +4, release +8, leftStick +0xC,
 // rightStick +0x14, tpNormal +0x52, tpFiltered1 +0x5A, tpFiltered2 +0x62, battery +0xA1
@@ -43,7 +130,10 @@ HLE_FUNC(vpad, VPADRead)
         RET_S32(0);
         return;
     }
-    const GamePadInput in = inputSampleGamePad();
+    GamePadInput in = inputSampleGamePad();
+    float tx = 0, ty = 0;
+    bool touched = windowTouch(tx, ty);
+    inputRecordReplay(in, touched, tx, ty);
     uint32_t trigger, release;
     {
         std::lock_guard guard(lock);
@@ -80,8 +170,6 @@ HLE_FUNC(vpad, VPADRead)
     storeFloat(buf + 0x14, in.rightX);
     storeFloat(buf + 0x18, in.rightY);
     // Écran tactile (souris, gpu_window.cpp) : coordonnées brutes 0..4096, y vers le haut (decaf)
-    float tx, ty;
-    const bool touched = windowTouch(tx, ty);
     for (uint32_t tp : { 0x52u, 0x5Au, 0x62u })
     {
         if (touched)
