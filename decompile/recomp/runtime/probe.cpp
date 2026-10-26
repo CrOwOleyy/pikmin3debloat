@@ -517,6 +517,27 @@ void sub_3454128(PPCContext& __restrict ctx, uint8_t* base)
         RT_INFO("RADAR %*s%08X %-28s drap %02X alpha %u/%u f :%s", s_paneDepth.load() * 2, "", pane, name.c_str(),
             base[pane + 68], base[pane + 69], base[pane + 70], floats.c_str());
     }
+    // DECAF_LOG_PANE=<sous-chaîne> : journalise l'alpha des panes lyt dont le nom contient la
+    // sous-chaîne (ex. le « Touchez » du menu titre), limité aux premières occurrences.
+    static const char* logPane = getenv("DECAF_LOG_PANE");
+    if (logPane)
+    {
+        static std::atomic<int> hits { 0 };
+        const uint32_t pane = ctx.r3.u32;
+        std::string name;
+        for (uint32_t off = 0x40; off < 0x120 && name.empty(); off++)
+        {
+            const char* p = reinterpret_cast<const char*>(base + pane + off);
+            size_t n = 0;
+            while (n < 24 && p[n] >= 0x30 && p[n] < 0x7B)
+                n++;
+            if (n >= 3 && p[n] == 0)
+                name.assign(p, n);
+        }
+        if (!name.empty() && name.find(logPane) != std::string::npos && hits++ < 200)
+            RT_INFO("PANE %-24s visible=%u alpha=%u/%u", name.c_str(), base[pane + 68] & 1, base[pane + 69],
+                base[pane + 70]);
+    }
     s_paneDepth++;
     __imp__sub_3454128(ctx, base);
     s_paneDepth--;
