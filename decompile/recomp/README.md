@@ -466,7 +466,15 @@ Relevés sur les captures en jeu (intro, zone enneigée, appel du communicateur)
    a désormais une couleur de sommet à 1. Même cause pour le visage du HUD trop transparent.
    Sondes : `DECAF_PROBE_LYT_COLOR`, `DECAF_PROBE_PANE_ALPHA=<s>` (`runtime/probe.cpp`).
 6. ~~Écran tactile sans effet~~ : la souris fait office d'écran tactile (voir 10).
-7. **Image délavée** et bandes cinéma grises : probablement liée à l'exposition faussée (4).
+7. ~~Image délavée~~ (corrigée le 2026-10-26, confirmée) : toute l'image était trop claire,
+   noirs relevés et faible contraste (1er centile de luminance à 0,32 au lieu de ~0,05). Mesuré
+   dans RenderDoc : la scène du jeu (R11G11B10_FLOAT) est juste, mais la chaîne d'affichage
+   appliquait un encodage sRGB **en trop**. Le jeu applique déjà son propre gamma dans sa passe
+   finale : son tampon est prêt à l'affichage et la Wii U le scanne tel quel. decaf créait le
+   scanbuffer en R8G8B8A8_**Srgb** et choisissait un swapchain **Srgb** ; le shader de présentation
+   (simple échantillonnage) ré-encodait donc l'image déjà encodée. Scanbuffer et swapchain passent
+   en **Unorm** (présentation 1:1, `vulkan_swapchain.cpp`, `vulkan_display.cpp`). Les bandes grises
+   avaient été réglées par ailleurs (barrières, problème 4).
 8. ~~Lenteur~~ : 30 images/s stables (2026-10-25). Le thread BossMgr du jeu (SpotPass)
    interrogeait en boucle des fonctions `nn_boss` non implémentées et occupait un cœur à 100 % ;
    sur un processeur à GPU intégré (Ryzen AI + Radeon 880M), cela prenait de la puissance au GPU

@@ -688,7 +688,7 @@ index 63fb1d6..b5ae4f7 100644
        case latte::SQ_TEX_DIM::DIM_1D:
        case latte::SQ_TEX_DIM::DIM_1D_ARRAY:
 diff --git a/src/libgpu/src/vulkan/vulkan_display.cpp b/src/libgpu/src/vulkan/vulkan_display.cpp
-index e96b29e..5170c8c 100644
+index e96b29e..c67a104 100644
 --- a/src/libgpu/src/vulkan/vulkan_display.cpp
 +++ b/src/libgpu/src/vulkan/vulkan_display.cpp
 @@ -1,5 +1,7 @@
@@ -711,7 +711,22 @@ index e96b29e..5170c8c 100644
  static VKAPI_ATTR VkBool32 VKAPI_CALL
  debugMessageCallback(VkDebugReportFlagsEXT flags,
                       VkDebugReportObjectTypeEXT objectType,
-@@ -914,7 +921,7 @@ createBuffers(VulkanDisplayPipeline &displayPipeline,
+@@ -306,11 +313,12 @@ static vk::Format
+ chooseSurfaceFormat(vk::PhysicalDevice &physicalDevice, vk::SurfaceKHR &surface)
+ {
+    auto formats = physicalDevice.getSurfaceFormatsKHR(surface);
++   // On présente le tampon du jeu 1:1 : format non sRGB, pas de ré-encodage à l écriture.
+    auto selected = formats[0];
+    for (auto &format : formats) {
+       switch (format.format) {
+-      case vk::Format::eR8G8B8A8Srgb:
+-      case vk::Format::eB8G8R8A8Srgb:
++      case vk::Format::eR8G8B8A8Unorm:
++      case vk::Format::eB8G8R8A8Unorm:
+          selected = format;
+          break;
+       }
+@@ -914,7 +922,7 @@ createBuffers(VulkanDisplayPipeline &displayPipeline,
                vk::PhysicalDevice &physicalDevice,
                vk::Device &device)
  {
@@ -720,7 +735,7 @@ index e96b29e..5170c8c 100644
        -1.0f,  1.0f,  0.0f,  1.0f,
         1.0f,  1.0f,  1.0f,  1.0f,
         1.0f, -1.0f,  1.0f,  0.0f,
-@@ -923,6 +930,17 @@ createBuffers(VulkanDisplayPipeline &displayPipeline,
+@@ -923,6 +931,17 @@ createBuffers(VulkanDisplayPipeline &displayPipeline,
        -1.0f, -1.0f,  0.0f,  0.0f,
        -1.0f,  1.0f,  0.0f,  1.0f,
     };
@@ -738,7 +753,7 @@ index e96b29e..5170c8c 100644
  
     // Allocate buffer
     auto bufferDesc = vk::BufferCreateInfo { };
-@@ -1242,6 +1260,10 @@ Driver::renderDisplay()
+@@ -1242,6 +1261,10 @@ Driver::renderDisplay()
                                         std::numeric_limits<uint64_t>::max());
     mDevice.resetFences({ renderFence });
  
@@ -749,7 +764,7 @@ index e96b29e..5170c8c 100644
     // Acquire the next frame to render into
     auto nextSwapImage = uint32_t { 0 };
     try {
-@@ -1401,6 +1423,8 @@ Driver::renderDisplay()
+@@ -1401,6 +1424,8 @@ Driver::renderDisplay()
  
        if (result == vk::Result::eErrorOutOfDateKHR) {
           recreateSwapchain(mDisplayPipeline, mPhysDevice, mDevice);
@@ -758,7 +773,7 @@ index e96b29e..5170c8c 100644
        }
     }
  
-@@ -1415,7 +1439,7 @@ Driver::windowHandleChanged(void *handle)
+@@ -1415,7 +1440,7 @@ Driver::windowHandleChanged(void *handle)
  void
  Driver::windowSizeChanged(int width, int height)
  {
@@ -1410,6 +1425,22 @@ index c1da79e..c352ace 100644
 +   if (surface->activeUsage == usage && usage != ResourceUsage::TransferDst) {
        return;
     }
+ 
+diff --git a/src/libgpu/src/vulkan/vulkan_swapchain.cpp b/src/libgpu/src/vulkan/vulkan_swapchain.cpp
+index 4101a2d..81c6504 100644
+--- a/src/libgpu/src/vulkan/vulkan_swapchain.cpp
++++ b/src/libgpu/src/vulkan/vulkan_swapchain.cpp
+@@ -15,7 +15,10 @@ Driver::allocateSwapChain(const SwapChainDesc &desc)
+    surfaceDesc.depth = 1;
+    surfaceDesc.samples = 1u;
+    surfaceDesc.dim = latte::SQ_TEX_DIM::DIM_2D;
+-   surfaceDesc.format = latte::SurfaceFormat::R8G8B8A8Srgb;
++   // Le jeu produit une image déjà prête à l affichage (il applique son propre gamma dans sa
++   // passe finale) et la Wii U la scanne telle quelle. On présente donc le tampon 1:1 : scan
++   // buffer et swapchain en Unorm, sans ré-encodage sRGB (sinon l image est délavée).
++   surfaceDesc.format = latte::SurfaceFormat::R8G8B8A8Unorm;
+    surfaceDesc.tileType = latte::SQ_TILE_TYPE::DEFAULT;
+    surfaceDesc.tileMode = latte::SQ_TILE_MODE::LINEAR_ALIGNED;
  
 diff --git a/src/libgpu/src/vulkan/vulkan_textures.cpp b/src/libgpu/src/vulkan/vulkan_textures.cpp
 index f8f0a16..ed0cfef 100644
